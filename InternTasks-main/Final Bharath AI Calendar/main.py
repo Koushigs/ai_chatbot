@@ -668,7 +668,7 @@ def call_janmarashi_api(date: str, time: str, place: str) -> Optional[Dict]:
     """Call Janmarashi API"""
     try:
         print(f"🔮 Calling Janmarashi API: {date}, {time}, {place}")
-        payload = {"date": date, "time": time, "place": place}
+        payload = {"date": date, "time": time, "place": place, "lang": "en"}
         response = requests.post(JANMARASHI_API, json=payload, timeout=10)
 
         if response.status_code == 200:
