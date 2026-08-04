@@ -461,8 +461,22 @@
             document.getElementById(pageId).classList.add('show');
         }
 
-        function handlePayment() {
+        async function handlePayment() {
             console.log('🎯 Starting Razorpay payment...');
+            
+            // ✅ Check if order is already paid to prevent "order is already paid" error modal
+            try {
+                const checkRes = await fetch(`${window.location.origin}/payment/status?order_id=${ORDER_ID}`);
+                const checkData = await checkRes.json();
+                if (checkData.payment_completed) {
+                    showPage('successPage');
+                    const successTitle = document.getElementById('successTitle') || document.querySelector('#successPage h2');
+                    if (successTitle) successTitle.innerText = 'Payment Already Completed!';
+                    return;
+                }
+            } catch(e) {
+                console.log('Status check note:', e);
+            }
             
             // Trigger Razorpay payment
             const options = {
