@@ -487,6 +487,7 @@ api = FastAPI(
     description="",
     version="3.8.0"
 )
+app = api
 
 
 api.add_middleware(
