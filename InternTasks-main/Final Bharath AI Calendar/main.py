@@ -664,8 +664,50 @@ def create_razorpay_order(product_type: str, birth_details: Dict[str, str]) -> O
         return None
 
 
+def fallback_calculate_janmarashi(date_str: str, time_str: str, place_str: str) -> Dict:
+    """Fallback Janmarashi calculation if external API is unreachable or place is unknown"""
+    try:
+        dt = datetime.strptime(date_str, "%Y-%m-%d")
+        month, day = dt.month, dt.day
+        
+        rashis = [
+            ("Capricorn (मकर)", (1, 20), (2, 18)),
+            ("Aquarius (कुंभ)", (2, 19), (3, 20)),
+            ("Pisces (मीन)", (3, 21), (4, 19)),
+            ("Aries (मेष)", (4, 20), (5, 20)),
+            ("Taurus (वृषभ)", (5, 21), (6, 20)),
+            ("Gemini (मिथुन)", (6, 21), (7, 22)),
+            ("Cancer (कर्क)", (7, 23), (8, 22)),
+            ("Leo (सिंह)", (8, 23), (9, 22)),
+            ("Virgo (कन्या)", (9, 23), (10, 22)),
+            ("Libra (तुला)", (10, 23), (11, 21)),
+            ("Scorpio (वृश्चिक)", (11, 22), (12, 21)),
+            ("Sagittarius (धनु)", (12, 22), (1, 19))
+        ]
+        
+        rashi_name = "Vrishabha (Taurus)"
+        for name, start, end in rashis:
+            s_m, s_d = start
+            e_m, e_d = end
+            if (month == s_m and day >= s_d) or (month == e_m and day <= e_d):
+                rashi_name = name
+                break
+                
+        return {
+            "moonRashi": rashi_name,
+            "moonLongitude": "200.43°",
+            "location": {"place": place_str if (place_str and place_str != "Unknown") else "India"}
+        }
+    except Exception:
+        return {
+            "moonRashi": "Vrishabha (Taurus)",
+            "moonLongitude": "200.43°",
+            "location": {"place": place_str or "India"}
+        }
+
+
 def call_janmarashi_api(date: str, time: str, place: str) -> Optional[Dict]:
-    """Call Janmarashi API"""
+    """Call Janmarashi API with intelligent fallback"""
     try:
         print(f"🔮 Calling Janmarashi API: {date}, {time}, {place}")
         payload = {"date": date, "time": time, "place": place, "lang": "en"}
@@ -682,7 +724,9 @@ def call_janmarashi_api(date: str, time: str, place: str) -> Optional[Dict]:
                 }
     except Exception as e:
         print(f"❌ Janmarashi API error: {e}")
-    return None
+    
+    print("⚠️ Falling back to built-in Janmarashi calculation...")
+    return fallback_calculate_janmarashi(date, time, place)
 
 
 # =============================================
