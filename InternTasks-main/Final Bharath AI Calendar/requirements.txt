@@ -3,7 +3,9 @@ uvicorn
 pydantic
 requests
 razorpay
+langgraph
 langchain
+langchain-core
 langchain-openai
 langchain-community
 python-dotenv
