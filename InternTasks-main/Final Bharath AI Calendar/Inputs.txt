@@ -1,0 +1,48 @@
+Inputs
+{
+  "messages": [{"role": "user", "content": "Horoscope of leo today"}]
+}
+{
+  "messages": [{"role": "user", "content": "Generate janmarashi for 2004-04-09, 01:00 AM, Bengaluru"}]
+}
+{
+  "messages": [{"role": "user", "content": "Generate kundali for 2004-04-09, 09:30 PM, Ongole"}]
+}
+{
+  "messages": [{"role": "user", "content": "Festivals in july 2025"}]
+}
+{
+  "messages": [{"role": "user", "content": "Holidays in 2025"}]
+}
+{
+  "messages": [
+        {
+            "role": "user",
+            "content": "Generate kundali for 2004-04-09, 01:00 AM, Ongole (For context, today's date is Tuesday, January 27, 2026.)"
+        },
+        {
+            "role": "assistant",
+            "content": "🎯 KUNDALI GENERATION (BIRTH CHART)\n\n✅ Birth details found:\n  📅 Date: 2004-04-09\n  🕐 Time: 01:00 AM\n  📍 Place: 01:00 AM\n\n💰 Cost: ₹199 (One-time payment)\n\nYou will receive:\n  📄 Detailed birth chart PDF\n  🔍 Complete astrological analysis\n  💎 Personalized insights\n\nDo you want to proceed with payment?\n(Reply: yes or no)"
+        }
+        {
+        "role": "user",
+        "content": "yes"
+      }
+    ]
+}
+{
+    "messages": [
+      {
+        "role": "user",
+        "content": "Generate janmarashi for 2004-04-09, 01:00 AM, Bengaluru"
+      },
+      {
+        "role": "assistant",
+        "content": "🔮 JANMARASHI (MOON SIGN) CALCULATION\n\n✅ Birth details found:\n  Date: 2004-04-09\n  Time: 01:00 AM\n  Place: Bengaluru\n\n💰 Cost: ₹20 (One-time payment)\n\nYou will receive:\n  🌙 Your Janma Rashi (Moon Sign)\n  📊 Moon Longitude details\n  💎 Rashi-specific recommendations\n\nDo you want to proceed with payment?\n(Reply: yes or no)"
+      },
+      {
+        "role": "user",
+        "content": "yes"
+      }
+    ]
+  }

@@ -1,0 +1,377 @@
+{
+  "info": {
+    "_postman_id": "f826bb34-3b20-4f0e-8246-63f7dfafb195",
+    "name": "chat_module",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "34404154",
+    "_collection_link": "https://go.postman.co/collection/34404154-f826bb34-3b20-4f0e-8246-63f7dfafb195?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "Horoscope",
+      "item": [
+        {
+          "name": "Horoscope-Eng",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"messages\": [\r\n    {\r\n      \"role\": \"user\",\r\n      \"content\": \"What is the horoscope for Leo today?\"\r\n    }\r\n  ]\r\n}\r\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://165.232.177.1:8001/invoke",
+              "protocol": "http",
+              "host": [
+                "165",
+                "232",
+                "177",
+                "1"
+              ],
+              "port": "8001",
+              "path": [
+                "invoke"
+              ]
+            },
+            "description": "🌟 HOROSCOPE GENERATOR\n\nPURPOSE:  \nGet daily horoscope predictions for any zodiac sign.\n\nWHAT TO SEND:\n\n- Zodiac sign name (Leo, Aries, etc.)\n    \n\nEXPECTED RESPONSE:\n\n- Prediction text (100-200 words)\n    \n- Lucky number\n    \n- Lucky color\n    \n- Cost: FREE ✅\n    \n\nHTTP STATUS: 200 OK"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Panchang",
+      "item": [
+        {
+          "name": "Panchang-Eng",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"messages\": [{\"role\": \"user\", \"content\": \"Panchang today\"}]\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://165.232.177.1:8001/invoke",
+              "protocol": "http",
+              "host": [
+                "165",
+                "232",
+                "177",
+                "1"
+              ],
+              "port": "8001",
+              "path": [
+                "invoke"
+              ]
+            },
+            "description": "📅 PANCHANG (HINDU CALENDAR)\n\nPURPOSE:  \nGet detailed daily panchang including tithi, nakshatra, yoga, sunrise/sunset times.\n\nWHAT TO SEND:\n\n- Date in format YYYY-MM-DD\n    \n\nEXPECTED RESPONSE:\n\n- Tithi (lunar day)\n    \n- Nakshatra (lunar mansion)\n    \n- Yoga (auspicious time)\n    \n- Sunrise/Sunset times\n    \n- Cost: FREE ✅\n    \n\nHTTP STATUS: 200 OK"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Holidays",
+      "item": [
+        {
+          "name": "Holidays-Eng",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"messages\": [{\"role\": \"user\", \"content\": \"Holidays in 2025\"}]\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://165.232.177.1:8001/invoke",
+              "protocol": "http",
+              "host": [
+                "165",
+                "232",
+                "177",
+                "1"
+              ],
+              "port": "8001",
+              "path": [
+                "invoke"
+              ]
+            },
+            "description": "🎉 HOLIDAYS FINDER\n\nPURPOSE:  \nGet list of national, regional, and religious holidays.\n\nEXPECTED RESPONSE:\n\n- Holiday name\n    \n- Holiday type (National/Regional/Religious)\n    \n- Date\n    \n- Cost: FREE ✅\n    \n\nHTTP STATUS: 200 OK"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Festivals",
+      "item": [
+        {
+          "name": "Festivals-Eng",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"messages\": [{\"role\": \"user\", \"content\": \"Festivals in july 2025\"}]\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://165.232.177.1:8001/invoke",
+              "protocol": "http",
+              "host": [
+                "165",
+                "232",
+                "177",
+                "1"
+              ],
+              "port": "8001",
+              "path": [
+                "invoke"
+              ]
+            },
+            "description": "🪔 MONTHLY FESTIVALS\n\nPURPOSE:  \nGet all festivals and celebrations for the month.\n\nEXPECTED RESPONSE:\n\n- Festival names\n    \n- Dates\n    \n- Festival type (Religious/Cultural/Regional)\n    \n- Cost: FREE ✅\n    \n\nHTTP STATUS: 200 OK"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Kundali",
+      "item": [
+        {
+          "name": "Kundali-User Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"messages\": [\r\n    {\r\n      \"role\": \"user\",\r\n      \"content\": \"Generate kundali for 2004-04-09, 01:00 AM, Ongole\"\r\n    }\r\n  ]\r\n}\r\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://165.232.177.1:8001/invoke",
+              "protocol": "http",
+              "host": [
+                "165",
+                "232",
+                "177",
+                "1"
+              ],
+              "port": "8001",
+              "path": [
+                "invoke"
+              ]
+            },
+            "description": "## Kundali Flow - Quick Request Guide\n\n**🌙 Request-1: User asks for kundali**\n\n_\"Generate kundali for 2004-04-09, 01:00 AM, Ongole\"_  \n→ **Shows ₹199 payment confirmation** (`awaiting_payment_confirmation`)\n\n**💳 Request-2: User says \"yes\"**  \n_\"yes\"_  \n→ **Creates Razorpay order → Payment link** (`order_S8xFDCZiPQjrUk`)\n\n**✅ Request-3: Razorpay success callback**  \n`POST /paymentverify` with `order_id`, `razorpay_payment_id`, `razorpay_signature`  \n→ **Generates PDF → Download URL**\n\n**📥 Request-4: Download PDF**  \n`GET download_url` from Request-3  \n→ **Direct PDF file download using the link**"
+          },
+          "response": []
+        },
+        {
+          "name": "Kundali-Payment Request",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"messages\": [\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"Generate kundali for 2004-04-09, 01:00 AM, Ongole\"\r\n        },\r\n        {\r\n            \"role\": \"assistant\",\r\n            \"content\": \"🎯 KUNDALI GENERATION (BIRTH CHART)\\n\\n✅ Birth details found:\\n  📅 Date: 2004-04-09\\n  🕐 Time: 01:00 AM\\n  📍 Place: 01:00 AM\\n\\n💰 Cost: ₹199 (One-time payment)\\n\\nYou will receive:\\n  📄 Detailed birth chart PDF\\n  🔍 Complete astrological analysis\\n  💎 Personalized insights\\n\\nDo you want to proceed with payment?\\n(Reply: yes or no)\"\r\n        },\r\n        {\r\n        \"role\": \"user\",\r\n        \"content\": \"yes\"\r\n      }\r\n    ]\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://165.232.177.1:8001/invoke",
+              "protocol": "http",
+              "host": [
+                "165",
+                "232",
+                "177",
+                "1"
+              ],
+              "port": "8001",
+              "path": [
+                "invoke"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Kundali-Successful Payment",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"order_id\": \"order_S8xFDCZiPQjrUk\",\r\n  \"razorpay_payment_id\": \"pay_S8xFiJ9bRTVvlD\",\r\n  \"razorpay_signature\": \"189d0e1d604c83579d5cd307d71268aa28293cff8909014b2547cc6a06c93ffc\",\r\n  \"date\": \"2004-04-09\",\r\n  \"time\": \"01:00 AM\",\r\n  \"place\": \"Ongole\",\r\n  \"producttype\": \"kundali\"\r\n}\r\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://165.232.177.1:8001/payment/verify",
+              "protocol": "http",
+              "host": [
+                "165",
+                "232",
+                "177",
+                "1"
+              ],
+              "port": "8001",
+              "path": [
+                "payment",
+                "verify"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Janmarashi",
+      "item": [
+        {
+          "name": "Janmarashi-User Request",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"messages\": [{\"role\": \"user\", \"content\": \"Generate janmarashi for 2004-04-09, 01:00 AM, Bengaluru\"}]\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://165.232.177.1:8001/invoke",
+              "protocol": "http",
+              "host": [
+                "165",
+                "232",
+                "177",
+                "1"
+              ],
+              "port": "8001",
+              "path": [
+                "invoke"
+              ]
+            },
+            "description": "## Janmarashi Flow - Quick Request Guide\n\n**🌙 Request-1: User asks for janmarashi**  \n_\"Calculate janma rashi for 2004-04-09, 01:00 AM, Ongole\"_  \n→ **Shows ₹20 payment confirmation** (`awaiting_payment_confirmation`)\n\n**💳 Request-2: User says \"yes\"**  \n_\"yes\"_  \n→ **Creates Razorpay order → Payment link** (`order_XXXXX`)\n\n**✅ Request-3: Razorpay success callback**  \n`POST /paymentverify` with `order_id`, `razorpay_payment_id`, `razorpay_signature`  \n→ **Calls Janmarashi API → Returns rashi data** (`mesha, moon longitude, etc.`)\n\n**📋 Request-4: View Results**  \nNo separate download - **data returned directly** in Request-3 response:"
+          },
+          "response": []
+        },
+        {
+          "name": "Janmarashi-Payment Request",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"messages\": [\r\n      {\r\n        \"role\": \"user\",\r\n        \"content\": \"Generate janmarashi for 2004-04-09, 01:00 AM, Bengaluru\"\r\n      },\r\n      {\r\n        \"role\": \"assistant\",\r\n        \"content\": \"🔮 JANMARASHI (MOON SIGN) CALCULATION\\n\\n✅ Birth details found:\\n  Date: 2004-04-09\\n  Time: 01:00 AM\\n  Place: Bengaluru\\n\\n💰 Cost: ₹20 (One-time payment)\\n\\nYou will receive:\\n  🌙 Your Janma Rashi (Moon Sign)\\n  📊 Moon Longitude details\\n  💎 Rashi-specific recommendations\\n\\nDo you want to proceed with payment?\\n(Reply: yes or no)\"\r\n      },\r\n      {\r\n        \"role\": \"user\",\r\n        \"content\": \"yes\"\r\n      }\r\n    ]\r\n  }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://165.232.177.1:8001/invoke",
+              "protocol": "http",
+              "host": [
+                "165",
+                "232",
+                "177",
+                "1"
+              ],
+              "port": "8001",
+              "path": [
+                "invoke"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Janmarashi-Successful Payment",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"order_id\": \"order_S8w6C6N9lfEoFG\",\r\n  \"razorpay_payment_id\": \"pay_S8w6bLdPpRCWQc\", \r\n  \"razorpay_signature\": \"fadc6c123aabb0ffdfd26551972b022ccfd6ea553a851062d13b3437750803e0\",\r\n  \"date\": \"2004-04-09\",\r\n  \"time\": \"01:00 AM\",\r\n  \"place\": \"Bengaluru\",\r\n  \"product_type\": \"janmarashi\"\r\n}\r\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://165.232.177.1:8001/payment/verify",
+              "protocol": "http",
+              "host": [
+                "165",
+                "232",
+                "177",
+                "1"
+              ],
+              "port": "8001",
+              "path": [
+                "payment",
+                "verify"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+Inputs
+
+{
+  "messages": [{"role": "user", "content": "Horoscope of leo today"}]
+}
+
+{
+  "messages": [{"role": "user", "content": "Generate janmarashi for 2001-08-09, 01:00 AM, Bengaluru"}]
+}
+
+{
+  "messages": [{"role": "user", "content": "Generate kundali for 2001-08-09, 01:00 AM, Bengaluru"}]
+}
+
+
+
+{
+  "messages": [{"role": "user", "content": "Festivals in july 2025"}]
+}
+
+{
+  "messages": [{"role": "user", "content": "Holidays in 2025"}]
+}
