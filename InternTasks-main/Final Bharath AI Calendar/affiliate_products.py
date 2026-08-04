@@ -34,18 +34,23 @@ class AffiliateProductManager:
         
         # 1. Try fetching live from API
         try:
+            import ssl
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+            
             req = urllib.request.Request(API_URL, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=3) as resp:
+            with urllib.request.urlopen(req, timeout=10, context=ssl_context) as resp:
                 data = json.loads(resp.read().decode('utf-8'))
                 if isinstance(data, list) and len(data) > 0:
                     self.items = data
                     self.last_fetch_time = now
-                    # Save to local file cache
+                    # Save to local file cache if writable
                     try:
                         with open(CACHE_FILE, 'w', encoding='utf-8') as f:
                             json.dump({"timestamp": now, "items": data}, f, ensure_ascii=False, indent=2)
                     except Exception as ce:
-                        print(f"Warning: Could not save cache file: {ce}")
+                        pass
                     print(f"[OK] [Affiliate API] Successfully loaded {len(self.items)} products from live API.")
                     return
         except Exception as e:
