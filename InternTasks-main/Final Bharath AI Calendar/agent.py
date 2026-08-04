@@ -8,6 +8,7 @@ from tools import all_tools
 from prompts import SYSTEM_PROMPT as system_prompt
 
 # Create the agent using the model, tools, and the new system prompt
-app = create_react_agent(model=model, tools=all_tools, prompt=system_prompt)
+react_agent = create_react_agent(model=model, tools=all_tools, prompt=system_prompt)
+app = react_agent
 
 print("Pre-built ReAct agent created successfully!")

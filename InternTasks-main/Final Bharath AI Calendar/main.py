@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional, Tuple
-from agent import app as agent_app
+from agent import react_agent
 from datetime import datetime
 # pyrefly: ignore [missing-import]
 from langchain_core.messages import AIMessage
@@ -914,7 +914,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
     print(f"{'='*70}")
 
     try:
-        for event in agent_app.stream(inputs, stream_mode="values"):
+        for event in react_agent.stream(inputs, stream_mode="values"):
             msgs = event.get("messages", [])
             if msgs:
                 last_msg = msgs[-1]
