@@ -1320,15 +1320,16 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
                 pdf_size = len(pdf_response.content)
                 print(f"✅ PDF generated successfully! Size: {pdf_size} bytes")
                 
-                os.makedirs("static/temp", exist_ok=True)
-                
-                pdf_filename = f"kundali-{date}-{payment_id}.pdf"
-                pdf_path = f"static/temp/{pdf_filename}"
-                
-                with open(pdf_path, 'wb') as f:
-                    f.write(pdf_response.content)
-                
-                print(f"✅ PDF saved: {pdf_path}")
+                try:
+                    import tempfile
+                    temp_dir = tempfile.gettempdir()
+                    pdf_filename = f"kundali-{date}-{payment_id}.pdf"
+                    pdf_path = os.path.join(temp_dir, pdf_filename)
+                    with open(pdf_path, 'wb') as f:
+                        f.write(pdf_response.content)
+                    print(f"✅ PDF saved temporarily: {pdf_path}")
+                except Exception as save_err:
+                    print(f"⚠️ Note: Local temp PDF save skipped ({save_err})")
                 
                 base_url = get_base_url(http_request)
                 download_url = f"{base_url}/kundali/download?date={quote(date)}&time={quote(time)}&place={quote(place)}&payment_id={payment_id}"
