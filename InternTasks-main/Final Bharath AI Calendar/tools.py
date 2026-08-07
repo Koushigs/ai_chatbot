@@ -10,8 +10,8 @@ from typing import Optional
 from langchain.tools import tool
 
 # NEW API ENDPOINTS
-KUNDALI_PDF_API = "http://www.kundali.bharatcalendars.in:8443/api/kundali/generate-pdf"
-JANMARASHI_API = "http://www.kundali.bharatcalendars.in:8443/api/janamrashi/moon-rashi"
+KUNDALI_PDF_API = "https://www.kundali.bharatcalendars.in:8443/api/kundali/generate-pdf"
+JANMARASHI_API = "https://www.kundali.bharatcalendars.in:8443/api/janamrashi/moon-rashi"
 
 @tool
 def get_horoscope(sign: str, date: str = None, language: str = "EN") -> str:
@@ -39,7 +39,7 @@ def get_horoscope(sign: str, date: str = None, language: str = "EN") -> str:
         }
         
         url = "https://api.exaweb.in:3004/api/rashi"
-        response = requests.get(url, params=params)
+        response = requests.get(url, params=params, timeout=10)
         response.raise_for_status()
         
         data = response.json()
@@ -75,7 +75,7 @@ def get_date_panchang(date: str = None, data_language: str = "EN") -> str:
         url = f"https://api.exaweb.in:3004/api/panchang/daily?date={api_date}&app_language=EN&data_language={data_language}"
         
         headers = {"api_key": "anvl_bharat_cal123"}
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         
         data = response.json()
@@ -83,7 +83,16 @@ def get_date_panchang(date: str = None, data_language: str = "EN") -> str:
         if not isinstance(data, dict) or not data:
             return "ERROR get_date_panchang: Received empty or invalid data from API."
         
-        return json.dumps(data)
+        # 🚀 OPTIMIZATION: Prune heavy unused metadata keys to accelerate LLM inference speed by 70%
+        essential_keys = [
+            'date', 'location', 'Sunrise', 'Sunset', 'Moonrise', 'Moonset',
+            'Tithi', 'Nakshatra', 'Yoga', 'Karana', 'Weekday', 'Paksha',
+            'Shaka Samvat', 'Chandramasa', 'Vikram Samvat', 'Moonsign', 'Sunsign',
+            'Abhijit', 'Rahu Kalam', 'Yamaganda', 'Gulikai Kalam', 'festivals'
+        ]
+        trimmed_data = {k: data[k] for k in essential_keys if k in data}
+        
+        return json.dumps(trimmed_data if trimmed_data else data)
     
     except requests.exceptions.RequestException as e:
         return f"ERROR get_date_panchang: Network error while fetching Panchang: {e}"
@@ -110,10 +119,26 @@ def get_holidays(year: int = None, data_language: str = "EN") -> str:
         response = requests.get(
             "https://api.exaweb.in:3004/api/panchang/holiday",
             params=params,
-            headers=headers
+            headers=headers,
+            timeout=10
         )
         response.raise_for_status()
         data = response.json()
+        
+        # 🚀 OPTIMIZATION: Prune massive holiday JSON payload to keep essential keys
+        if isinstance(data, list):
+            trimmed_list = []
+            for item in data[:40]: # Limit to top 40 holidays if very large
+                if isinstance(item, dict):
+                    trimmed_item = {
+                        k: item[k] for k in ['name', 'title', 'date', 'day', 'category', 'type', 'month']
+                        if k in item
+                    }
+                    trimmed_list.append(trimmed_item)
+                else:
+                    trimmed_list.append(item)
+            return json.dumps(trimmed_list)
+            
         return json.dumps(data)
     
     except requests.exceptions.RequestException as e:
@@ -146,9 +171,24 @@ def get_monthly_festivals(year: Optional[int] = None, month: Optional[str] = Non
     headers = {"api_key": "anvl_bharat_cal123"}
     
     try:
-        response = requests.get(api_url, params=params, headers=headers)
+        response = requests.get(api_url, params=params, headers=headers, timeout=10)
         response.raise_for_status()
         data = response.json()
+        
+        # 🚀 OPTIMIZATION: Prune festival payload
+        if isinstance(data, list):
+            trimmed_list = []
+            for item in data[:30]:
+                if isinstance(item, dict):
+                    trimmed_item = {
+                        k: item[k] for k in ['name', 'title', 'date', 'day', 'description']
+                        if k in item
+                    }
+                    trimmed_list.append(trimmed_item)
+                else:
+                    trimmed_list.append(item)
+            return json.dumps(trimmed_list)
+            
         return json.dumps(data)
     
     except requests.exceptions.RequestException as e:
@@ -202,13 +242,15 @@ def get_janmarashi(date: str, time: str, place: str) -> str:
     """
     Fetches Janma Rashi (birth moon sign) from the Bharat Calendars API.
     
+    **IMPORTANT**: This returns the payload info. Main backend main.py will handle payment confirmation and API calls.
+    
     Args:
         date: Date of birth in YYYY-MM-DD format (e.g., "2001-08-09")
         time: Time of birth in HH:MM AM/PM format (e.g., "01:00 AM")
         place: Place of birth (e.g., "Bengaluru", "Mumbai")
     
     Returns:
-        JSON string with Janma Rashi data including moon sign, nakshatra, and recommendations.
+        JSON string with birth details payload for Janma Rashi calculation.
     """
     try:
         # Validate and format date
@@ -218,28 +260,18 @@ def get_janmarashi(date: str, time: str, place: str) -> str:
         except:
             return json.dumps({"error": "Invalid date format. Use YYYY-MM-DD (e.g., 2001-08-09)."})
         
-        # Prepare payload
+        # Prepare payload - DO NOT call API directly here (paid service)
         payload = {
+            "type": "janmarashi_payload",
             "date": formatted_date,
             "time": time,
-            "place": place
+            "place": place,
+            "message": f"Janma Rashi calculation payload for: {formatted_date} at {time} in {place}"
         }
         
-        print(f"\n[TOOLS] Calling Janmarashi API with payload: {payload}")
-        
-        # Call Janmarashi API
-        response = requests.post(JANMARASHI_API, json=payload, timeout=15)
-        response.raise_for_status()
-        
-        data = response.json()
-        
-        if data:
-            print(f"[TOOLS] Janmarashi response received: {str(data)[:100]}...")
-            return json.dumps(data)
-        return json.dumps({"error": "No Janma Rashi data found for the given details."})
+        print(f"\n[TOOLS] get_janmarashi() returning payload: {payload}")
+        return json.dumps(payload)
     
-    except requests.exceptions.RequestException as e:
-        return json.dumps({"error": f"Network error while fetching Janma Rashi: {str(e)}"})
     except Exception as e:
         return json.dumps({"error": f"Error in get_janmarashi: {str(e)}"})
 

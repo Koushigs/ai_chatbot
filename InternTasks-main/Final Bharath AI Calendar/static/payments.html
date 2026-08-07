@@ -430,6 +430,9 @@
             <button class="btn btn-primary" onclick="location.reload()">
                 Try Again
             </button>
+            <button class="btn back-to-chat" onclick="goBackToChat()" style="margin-top: 10px;">
+                ← Back to Chat
+            </button>
         </div>
     </div>
 
@@ -443,11 +446,12 @@
         const BIRTH_DATE = decodeURIComponent(getURLParam('date') || '');
         const BIRTH_TIME = decodeURIComponent(getURLParam('time') || '');
         const BIRTH_PLACE = decodeURIComponent(getURLParam('place') || '');
+        const LANG = decodeURIComponent(getURLParam('lang') || 'en');
 
         console.log('🚀 Initializing payment page...');
         console.log(`   Order ID: ${ORDER_ID}`);
         console.log(`   Product Type: ${PRODUCT_TYPE}`);
-        console.log(`   Birth Details: ${BIRTH_DATE}, ${BIRTH_TIME}, ${BIRTH_PLACE}`);
+        console.log(`   Birth Details: ${BIRTH_DATE}, ${BIRTH_TIME}, ${BIRTH_PLACE}, Language: ${LANG}`);
 
         function getURLParam(param) {
             const urlParams = new URLSearchParams(window.location.search);
@@ -518,7 +522,8 @@
                         date: BIRTH_DATE,
                         time: BIRTH_TIME,
                         place: BIRTH_PLACE,
-                        product_type: PRODUCT_TYPE
+                        product_type: PRODUCT_TYPE,
+                        lang: LANG
                     })
                 });
 
@@ -634,16 +639,34 @@
         }
 
         function goBackToChat() {
-            console.log('← Closing payment window...');
+            console.log('← Navigating back to chat...');
             
-            // Close this window - chat page will detect payment via localStorage
-            if (window.opener) {
-                console.log('Closing payment popup window...');
-                window.close();
-            } else {
-                console.log('Closing payment tab (user can manually close)...');
-                // User will manually close or navigate
+            // 1. If opened from chat window, switch focus to parent chat tab & close payment tab
+            if (window.opener && !window.opener.closed) {
+                try {
+                    window.opener.focus();
+                    window.close();
+                    return;
+                } catch (e) {
+                    console.warn('Could not focus/close popup window:', e);
+                }
             }
+
+            // 2. If opened in same tab/window, go back in history to keep exact chat state & messages
+            if (window.history.length > 1) {
+                window.history.back();
+                return;
+            }
+
+            // 3. Attempt to close the tab directly (works for tabs opened via link/script)
+            try {
+                window.close();
+            } catch (e) {
+                console.warn('Could not close window:', e);
+            }
+
+            // 4. Fallback if user navigated directly without history
+            window.location.href = `${window.location.origin}/static/chat_tester.html`;
         }
 
         // Initialize on page load

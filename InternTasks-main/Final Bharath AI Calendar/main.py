@@ -20,6 +20,8 @@ from product_formatter import (
     extract_lucky_number_from_horoscope, extract_lucky_color_from_horoscope
 )
 import requests
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import re
 from urllib.parse import urlencode, quote
 import html
@@ -46,11 +48,13 @@ load_dotenv()
 # ALL 9 INDIAN LANGUAGES + ENGLISH
 
 JANMARASHI_KEYWORDS = [
-    # English - REMOVED bare "rashi"!
-    "janmarashi", "janma rashi", "moon sign", "lunar sign", "birth moon",
+    # English & Common Misspellings / Typos
+    "janmarashi", "janmarash", "janma rashi", "janma rash", "janmma rashi", "janmma rash", "janmmarashi", "janam rashi", "janamrashi", "janam rash", "janm rashi", "janmrashi", "janmrash",
+    "janmarasi", "janma raasi", "janam raasi", "janmma raasi", "janmarashii", "janma rashii", "janmma",
+    "moon sign", "lunar sign", "birth moon", "birth rashi", "lunar rashi", "my rashi",
     
     # Hindi
-    "जन्म राशि", "चंद्र राशि",
+    "जन्म राशि", "चंद्र राशि", "जैनम राशि", "जन्मराशी",
     
     # Tamil
     "பிறப்பு இராசி",
@@ -220,6 +224,15 @@ def detect_tool_type_multilingual(user_query: str, ai_response: str, messages: O
     safe_print(f"Normalized: {normalized[:100]}")
     safe_print(f"{'='*70}\n")
     
+    # Check payload signatures first
+    if "janmarashi_payload" in ai_response or "janmarashi_payload" in user_query:
+        safe_print("✅ JANMARASHI CONFIRMED: janmarashi_payload signature found")
+        return "janmarashi"
+
+    if "kundali_pdf_payload" in ai_response or "kundali_pdf_payload" in user_query:
+        safe_print("✅ KUNDALI CONFIRMED: kundali_pdf_payload signature found")
+        return "kundali"
+
     # ==========================================
     # PRIORITY 1: KUNDALI (HIGHEST)
     # ==========================================
@@ -235,6 +248,17 @@ def detect_tool_type_multilingual(user_query: str, ai_response: str, messages: O
         if keyword in normalized:
             safe_print(f"✅ JANMARASHI CONFIRMED: '{keyword}'")
             return "janmarashi"
+
+    # Flexible regex matching for typos like janmma rashi, janam rashi, janm rashi, janmarasi
+    if re.search(r'\bja?n+a?m+[a-z]*\s*(?:r[a-z]*sh[a-z]*|r[a-z]*s[a-z]*|sign|moon|patrika)?\b', normalized):
+        safe_print("✅ JANMARASHI CONFIRMED via janm* typo regex pattern")
+        return "janmarashi"
+
+    # Check if birth details are present with rashi/moon keywords
+    birth_info = extract_birth_details(user_query)
+    if birth_info and any(w in normalized for w in ["rashi", "rashee", "raasi", "sign", "moon", "birth", "janma", "janam", "janmma"]):
+        safe_print("✅ JANMARASHI CONFIRMED: Birth details + Rashi/Moon keywords detected")
+        return "janmarashi"
 
     # ==========================================
     # PRIORITY 3: PANCHANG
@@ -276,10 +300,10 @@ def detect_tool_type_multilingual(user_query: str, ai_response: str, messages: O
         current_birth_details = extract_birth_details(user_query)
         if current_birth_details:
             history_text = " ".join(str(m.get("content", "")).lower() for m in messages if isinstance(m, dict) and m.get("role") == "user")
-            if any(kw in history_text for kw in KUNDALI_KEYWORDS):
+            if any(kw in history_text for kw in KUNDALI_KEYWORDS) or any(kw in history_text for kw in ["kundali", "kundli", "chart"]):
                 safe_print("✅ KUNDALI CONFIRMED via history context + current birth details")
                 return "kundali"
-            elif any(kw in history_text for kw in JANMARASHI_KEYWORDS):
+            elif any(kw in history_text for kw in JANMARASHI_KEYWORDS) or re.search(r'\bja?n+a?m+[a-z]*\s*(?:r[a-z]*sh[a-z]*|r[a-z]*s[a-z]*|sign|moon|patrika)?\b', history_text):
                 safe_print("✅ JANMARASHI CONFIRMED via history context + current birth details")
                 return "janmarashi"
 
@@ -333,6 +357,88 @@ def extract_birth_details_from_history(messages: List[Dict[str, Any]]) -> Option
             if details:
                 return details
     return None
+
+
+CITY_ALIASES = {
+    "shivamoga": "Shivamogga",
+    "shivamogaa": "Shivamogga",
+    "shimoga": "Shimoga",
+    "bengaluru": "Bengaluru",
+    "bangalore": "Bengaluru",
+    "mysuru": "Mysuru",
+    "mysore": "Mysore",
+    "hubballi": "Hubballi",
+    "hubli": "Hubli",
+    "mangaluru": "Mangaluru",
+    "mangalore": "Mangalore",
+    "belagavi": "Belagavi",
+    "belgaum": "Belgaum",
+    "kalaburagi": "Kalaburagi",
+    "gulbarga": "Gulbarga",
+    "ballari": "Ballari",
+    "bellary": "Bellary",
+    "davanagere": "Davanagere",
+    "davangere": "Davanagere",
+}
+
+def normalize_city_name(city: str) -> str:
+    if not city:
+        return city
+    # Strip noise words like report, reports, chart, pdf, details, kundali, kundli
+    clean_city = re.sub(
+        r'\b(?:report|reports|chart|pdf|details|kundali|kundli|janmarashi|janma|janam|rashi)\b',
+        '', city, flags=re.IGNORECASE
+    ).strip(' :=-')
+    if not clean_city:
+        clean_city = city.strip()
+    c_lower = clean_city.lower()
+    if c_lower in CITY_ALIASES:
+        return CITY_ALIASES[c_lower]
+    return clean_city.title()
+
+
+def extract_language(text: str) -> str:
+    """
+    Extract language code for Kundali PDF API (en, hi, ta, kn, ml, te, mr, gu, bn, or).
+    Defaults strictly to English ('en') if no explicit language is requested.
+    """
+    if not text:
+        return "en"
+    
+    t_clean = text.lower().strip()
+    
+    # Strip leading generic greetings like 'hi', 'hello', 'hey' to avoid false positive 'hi' (Hindi)
+    t_clean = re.sub(r'^(?:hi|hello|hey|greetings|namaste)[,\s!.]+', '', t_clean)
+
+    # 1. Kannada
+    if re.search(r'\b(?:kannada|kanada|kannad)\b|[ನನ್ನಜನ್ಮಕುಂಡಲಿರಾಶಿಕ್ಅಆಇಈಉಊಋಎಏಐಒಓಔಕಖಗಘಙಚಛಜಝಞಟಠಡಢಣತಥದಧನಪಫಬಭಮಯರಱಲವಶಷಸಹಳೞ]', t_clean):
+        return "kn"
+    # 2. Hindi
+    elif re.search(r'\b(?:hindi|hindu)\b|[अआइईउऊऋएऐओऔकखगघङचछजझञटठडढणतथदधनपफबभमयरलवशषसह]', t_clean):
+        return "hi"
+    # 3. Tamil
+    elif re.search(r'\b(?:tamil|tamizh)\b|[அஆஇஈஉஊஎஏஐஒஓஔகஙசஜஞடணதநபமயரலவழளறன]', t_clean):
+        return "ta"
+    # 4. Telugu
+    elif re.search(r'\b(?:telugu|telgu)\b|[అఆఇఈఉఊఋఎఏఐఒఓఔకఖగఘఙచఛజఝఞటఠడఢణతథదధనపఫబభమయరలవశషసహ]', t_clean):
+        return "te"
+    # 5. Malayalam
+    elif re.search(r'\b(?:malayalam|kerala)\b|[അആഇഈഉഊഋഎഏഐഒഓഔകഖഗഘങചഛജഝഞടഠഡഢണതഥദധനപഫബഭമയരലവശഷസഹളഴറ]', t_clean):
+        return "ml"
+    # 6. Marathi
+    elif re.search(r'\bmarathi\b', t_clean):
+        return "mr"
+    # 7. Gujarati
+    elif re.search(r'\b(?:gujarati|gujrati)\b|[અઆઇઈઉઊઋએઐઓઔકખગઘઙચછજઝઞટઠડઢણતથદધનપફબભમયરલવશષસહળ]', t_clean):
+        return "gu"
+    # 8. Bengali
+    elif re.search(r'\b(?:bengali|bangla)\b|[অআইঈউঊঋএঐওঔকখগঘঙচছজঝঞটঠডঢণতথদধনপফবভময়رلশষসহள]', t_clean):
+        return "bn"
+    # 9. Odia
+    elif re.search(r'\b(?:odia|oriya)\b|[ଅଆଇଈଉଊଋଏଐଓୌକଖଗଘଙଚଛଜଝଞଟଠଡଢଣତଥଦଧନପଫବଭମଯରଲଵଶଷସହଳ]', t_clean):
+        return "or"
+    # 10. English (Default)
+    return "en"
 
 
 def extract_birth_details(text: str) -> Optional[Dict[str, str]]:
@@ -394,14 +500,23 @@ def extract_birth_details(text: str) -> Optional[Dict[str, str]]:
         elif match_time_simple:
             remainder = remainder.replace(match_time_simple.group(0), "")
 
+        # Remove language phrases from remainder to keep place string clean
+        remainder = re.sub(r'\b(?:in|language|lang)\s+(?:kannada|hindi|tamil|telugu|malayalam|marathi|gujarati|bengali|odia|english)\b', '', remainder, flags=re.IGNORECASE)
+        remainder = re.sub(r'\b(?:kannada|hindi|tamil|telugu|malayalam|marathi|gujarati|bengali|odia|english)\b', '', remainder, flags=re.IGNORECASE)
+        
+        # Remove field label keywords (date, time, place, location, city, dob, tob, pob, details) from remainder
+        remainder = re.sub(r'\b(?:date|time|place|location|city|dob|tob|pob|details)\b', '', remainder, flags=re.IGNORECASE)
+
         parts = [p.strip() for p in remainder.split(",") if p.strip()]
         valid_parts = []
         for part in parts:
+            # Remove any trailing/leading keywords, language names, or intro verbs
             cleaned_part = re.sub(
-                r'\b(?:i|want|generate|get|my|kundali|kundli|janmarashi|for|in|city|place|at|location|के|लिए|की|में)\b',
+                r'^(?:i|want|generate|get|calculate|tell|me|my|report|reports|chart|pdf|kundali|kundli|janmarashi|janma|janam|janmma|rashi|rashee|raasi|for|in|city|place|at|location|language|lang|kannada|hindi|tamil|telugu|bengali|marathi|malayalam|english|punjabi|gujarati|के|लिए|की|में|ನನ್ನ|ಜನ್ಮ|ರಾಶಿ|ಲೆಕ್ಕಾಚಾರ|ಮಾಡಿ|\s|[:=-])+',
                 '', part, flags=re.IGNORECASE
             ).strip(' :=-')
-            if cleaned_part and not re.match(r'^\d+$', cleaned_part):
+            cleaned_part = re.sub(r'\b(?:report|reports|chart|pdf|details|kundali|kundli|janmarashi)\b', '', cleaned_part, flags=re.IGNORECASE).strip(' :=-')
+            if cleaned_part and not re.match(r'^\d+$', cleaned_part) and not any(k in cleaned_part.lower() for k in ["janmarashi", "janma rashi", "janmma rashi", "kundali"]):
                 valid_parts.append(cleaned_part)
 
         place_text = ", ".join(valid_parts) if valid_parts else "Unknown"
@@ -409,13 +524,30 @@ def extract_birth_details(text: str) -> Optional[Dict[str, str]]:
         result = {
             "date": date_str,
             "time": time_str,
-            "place": place_text if place_text else "Unknown"
+            "place": place_text if place_text else "Unknown",
+            "lang": extract_language(text)
         }
         safe_print(f"[EXTRACT] ✅ Found: {result}")
         return result
 
-    safe_print("[EXTRACT] ⚠️ Details not found")
-    return None
+def format_time_for_api(time_str: str) -> str:
+    """Ensure time format is 'HH:MM AM/PM' required by external Kundali API."""
+    if not time_str:
+        return "12:00 PM"
+    time_str = time_str.strip()
+    if re.search(r'\b(AM|PM)\b', time_str, re.IGNORECASE):
+        return time_str
+    match = re.match(r'^(\d{1,2}):(\d{2})$', time_str)
+    if match:
+        hr = int(match.group(1))
+        mn = match.group(2)
+        if hr >= 12:
+            hr_12 = hr if hr == 12 else hr - 12
+            return f"{hr_12:02d}:{mn} PM"
+        else:
+            hr_12 = 12 if hr == 0 else hr
+            return f"{hr_12:02d}:{mn} AM"
+    return time_str
 
 
 def extract_updates_to_birth_details(current_details: Dict[str, str], user_query: str) -> Tuple[Dict[str, str], bool]:
@@ -469,12 +601,33 @@ def extract_updates_to_birth_details(current_details: Dict[str, str], user_query
             updated_details["place"] = cleaned_place
             is_updated = True
 
+    # 4. Check Language update
+    new_lang = extract_language(text)
+    is_lang_keyword = any(k in text.lower() for k in [
+        "english", "kannada", "kanada", "hindi", "tamil", "telugu", "malayalam",
+        "marathi", "gujarati", "bengali", "odia", "language", "lang"
+    ])
+    if is_lang_keyword or new_lang != "en":
+        if updated_details.get("lang") != new_lang:
+            updated_details["lang"] = new_lang
+            is_updated = True
+        # Ensure place is not accidentally set to a language keyword
+        if updated_details.get("place", "").lower() in [
+            "english", "kannada", "kanada", "hindi", "tamil", "telugu", "malayalam",
+            "marathi", "gujarati", "bengali", "odia", "language", "lang"
+        ]:
+            updated_details["place"] = current_details.get("place", "Unknown")
+
     # Standalone place input (e.g. "Shikaripura" or "Shikaripura, Karnataka")
-    if not is_updated and not match_yyyy and not match_dd and not match_time_colon and not match_time_simple:
+    if not is_updated and not is_lang_keyword and not match_yyyy and not match_dd and not match_time_colon and not match_time_simple:
         cleaned_text = re.sub(r'^(?:change|correct|wrong|new|my|place|city|location|is|to|in|at)\s+', '', text, flags=re.IGNORECASE).strip(' :=-')
         if cleaned_text and len(cleaned_text) >= 2 and not is_yes_response(text) and not is_no_response(text):
-            updated_details["place"] = cleaned_text
-            is_updated = True
+            if cleaned_text.lower() not in [
+                "english", "kannada", "kanada", "hindi", "tamil", "telugu", "malayalam",
+                "marathi", "gujarati", "bengali", "odia", "language", "lang"
+            ]:
+                updated_details["place"] = cleaned_text
+                is_updated = True
 
     return updated_details, is_updated
 
@@ -534,11 +687,25 @@ else:
 razorpay_client = Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
 
 
+# ✅ LANGUAGE DISPLAY NAMES
+LANG_DISPLAY_NAMES = {
+    "en": "English",
+    "kn": "Kannada",
+    "hi": "Hindi",
+    "ta": "Tamil",
+    "te": "Telugu",
+    "ml": "Malayalam",
+    "mr": "Marathi",
+    "gu": "Gujarati",
+    "bn": "Bengali",
+    "or": "Odia"
+}
+
 # =============================================
 # API ENDPOINTS & CONFIGURATION
 # =============================================
-KUNDALI_PDF_API = "http://www.kundali.bharatcalendars.in:8443/api/kundali/generate-pdf"
-JANMARASHI_API = "http://www.kundali.bharatcalendars.in:8443/api/janamrashi/moon-rashi"
+KUNDALI_PDF_API = "https://www.kundali.bharatcalendars.in:8443/api/kundali/generate-pdf"
+JANMARASHI_API = "https://www.kundali.bharatcalendars.in:8443/api/janamrashi/moon-rashi"
 BASE_URL = "http://127.0.0.1:8000"
 
 
@@ -581,6 +748,7 @@ class PaymentVerifyRequest(BaseModel):
     time: str
     place: str
     product_type: Optional[str] = "kundali"
+    lang: Optional[str] = "en"
 
 
 # =============================================
@@ -706,12 +874,12 @@ def fallback_calculate_janmarashi(date_str: str, time_str: str, place_str: str) 
         }
 
 
-def call_janmarashi_api(date: str, time: str, place: str) -> Optional[Dict]:
+def call_janmarashi_api(date: str, time: str, place: str, lang: str = "en") -> Optional[Dict]:
     """Call Janmarashi API with intelligent fallback"""
     try:
-        print(f"🔮 Calling Janmarashi API: {date}, {time}, {place}")
-        payload = {"date": date, "time": time, "place": place, "lang": "en"}
-        response = requests.post(JANMARASHI_API, json=payload, timeout=10)
+        print(f"🔮 Calling Janmarashi API: {date}, {time}, {place}, lang={lang}")
+        payload = {"date": date, "time": time, "place": place, "lang": lang.lower()}
+        response = requests.post(JANMARASHI_API, json=payload, timeout=10, verify=False)
 
         if response.status_code == 200:
             data = response.json()
@@ -812,6 +980,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
 
             amount = JANMARASHI_PRICE if product_type == "janmarashi" else KUNDALI_PRICE
             product_display = "Janmarashi (Moon Sign)" if product_type == "janmarashi" else "Kundali (Birth Chart)"
+            lang_display = LANG_DISPLAY_NAMES.get(updated_details.get('lang', 'en').lower(), 'English')
 
             content_lines = [
                 "✏️ BIRTH DETAILS UPDATED",
@@ -820,6 +989,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
                 f"  📅 Date: {updated_details['date']}",
                 f"  🕐 Time: {updated_details['time']}",
                 f"  📍 Place: {updated_details['place']}",
+                f"  🌐 Selected Language: {lang_display}",
                 "",
                 f"💰 Cost: ₹{amount} (One-time payment)",
                 "",
@@ -865,8 +1035,9 @@ def invoke_agent(request: QueryRequest, http_request: Request):
                     product_display = "Kundali PDF"
                 
                 base_url = get_base_url(http_request)
-                payment_link = f"{base_url}/static/payments.html?order_id={order_id}&key_id={RAZORPAY_KEY_ID}&product_type={product_type}&amount={amount}&date={quote(birth_details['date'])}&time={quote(birth_details['time'])}&place={quote(birth_details['place'])}"
+                payment_link = f"{base_url}/static/payments.html?order_id={order_id}&key_id={RAZORPAY_KEY_ID}&product_type={product_type}&amount={amount}&date={quote(birth_details['date'])}&time={quote(birth_details['time'])}&place={quote(birth_details['place'])}&lang={quote(birth_details.get('lang', 'en'))}"
                 
+                lang_display = LANG_DISPLAY_NAMES.get(birth_details.get('lang', 'en').lower(), 'English')
                 content_lines = [
                     "🎉 PAYMENT LINK GENERATED 🎉",
                     "",
@@ -882,6 +1053,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
                     f"   Date: {birth_details['date']}",
                     f"   Time: {birth_details['time']}",
                     f"   Place: {birth_details['place']}",
+                    f"   Language: {lang_display}",
                     "",
                     f"📍 Order ID: {order_id}",
                     "",
@@ -964,8 +1136,9 @@ def invoke_agent(request: QueryRequest, http_request: Request):
                 last_msg = msgs[-1]
                 if isinstance(last_msg, AIMessage) and not last_msg.tool_calls:
                     final_ai_response = last_msg.content
-    except Exception as e:
-        final_ai_response = f"Error: {str(e)}"
+    except (Exception, KeyboardInterrupt) as e:
+        safe_print(f"⚠️ Agent execution interrupted: {e}")
+        final_ai_response = "Request was cancelled or server was restarted."
 
     safe_print(f"AI Response (raw): {final_ai_response[:150]}...")
     
@@ -1031,6 +1204,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
             print(f"✅ Stored pending janmarashi request: {conversation_hash}")
             print(f"📝 Birth Details: {birth_details}")
 
+            lang_display = LANG_DISPLAY_NAMES.get(birth_details.get('lang', 'en').lower(), 'English')
             content_lines = [
                 "🔮 JANMARASHI (MOON SIGN) CALCULATION",
                 "",
@@ -1038,6 +1212,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
                 f"  📅 Date: {birth_details['date']}",
                 f"  🕐 Time: {birth_details['time']}",
                 f"  📍 Place: {birth_details['place']}",
+                f"  🌐 Selected Language: {lang_display}",
                 "",
                 "💰 Cost: ₹20 (One-time payment)",
                 "",
@@ -1066,9 +1241,10 @@ def invoke_agent(request: QueryRequest, http_request: Request):
                 "1. Date of birth (e.g., 2004-04-09 or 09-04-2004)",
                 "2. Time of birth (e.g., 01:00 AM or 6am)",
                 "3. Place of birth (e.g., Bengaluru, Delhi, Mumbai)",
+                "4. Preferred language (e.g., English, Kannada, Hindi, Tamil, Telugu, Malayalam, Marathi, Gujarati, Bengali, Odia)",
                 "",
                 "Example:",
-                "2004-04-09, 01:00 AM, Bengaluru",
+                "2004-04-09, 01:00 AM, Bengaluru, English",
                 "",
                 "Once you provide these details, I will set up your Janma Rashi report (₹20)."
             ]
@@ -1091,6 +1267,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
             safe_print(f"✅ Stored pending kundali request: {conversation_hash}")
             safe_print(f"📝 Birth Details: {birth_details}")
 
+            lang_display = LANG_DISPLAY_NAMES.get(birth_details.get('lang', 'en').lower(), 'English')
             content_lines = [
                 "🎯 KUNDALI GENERATION (BIRTH CHART)",
                 "",
@@ -1098,6 +1275,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
                 f"  📅 Date: {birth_details['date']}",
                 f"  🕐 Time: {birth_details['time']}",
                 f"  📍 Place: {birth_details['place']}",
+                f"  🌐 Selected Language: {lang_display}",
                 "",
                 "💰 Cost: ₹199 (One-time payment)",
                 "",
@@ -1127,9 +1305,10 @@ def invoke_agent(request: QueryRequest, http_request: Request):
                 "1. Date of birth (e.g., 2004-04-09 or 09-04-2004)",
                 "2. Time of birth (e.g., 01:00 AM or 6am)",
                 "3. Place of birth (e.g., Bengaluru, Delhi, Mumbai)",
+                "4. Preferred language (e.g., English, Kannada, Hindi, Tamil, Telugu, Malayalam, Marathi, Gujarati, Bengali, Odia)",
                 "",
                 "Example:",
-                "2004-04-09, 01:00 AM, Bengaluru",
+                "2004-04-09, 01:00 AM, Bengaluru, English",
                 "",
                 "Once you provide these details, I will set up your Kundali PDF report (₹199)."
             ]
@@ -1282,7 +1461,7 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
             print(f"\n📊 Preparing Janmarashi data...")
             
             try:
-                janmarashi_data = call_janmarashi_api(date, time, place)
+                janmarashi_data = call_janmarashi_api(date, time, place, getattr(request, 'lang', 'en') or 'en')
                 
                 if janmarashi_data:
                     rashi = janmarashi_data["moonRashi"]
@@ -1342,13 +1521,16 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
         else:
             print(f"\n📄 Generating Kundali PDF...")
             
-            pdf_payload = {"date": date, "time": time, "place": place, "lang": "en"}
+            lang = (getattr(request, 'lang', 'en') or "en").lower()
+            formatted_time = format_time_for_api(time)
+            pdf_payload = {"date": date, "time": formatted_time, "place": place, "lang": lang}
             
             try:
                 pdf_response = requests.post(
                     KUNDALI_PDF_API,
                     json=pdf_payload,
-                    timeout=30
+                    timeout=30,
+                    verify=False
                 )
                 
                 print(f"PDF API Response Status: {pdf_response.status_code}")
@@ -1376,7 +1558,7 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
                     print(f"⚠️ Note: Local temp PDF save skipped ({save_err})")
                 
                 base_url = get_base_url(http_request)
-                download_url = f"{base_url}/kundali/download?date={quote(date)}&time={quote(time)}&place={quote(place)}&payment_id={payment_id}"
+                download_url = f"{base_url}/kundali/download?date={quote(date)}&time={quote(time)}&place={quote(place)}&payment_id={payment_id}&lang={quote(lang)}"
                 
                 completed_payments[order_id] = {
                     "product_type": "kundali",
@@ -1384,6 +1566,7 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
                         "date": date,
                         "time": time,
                         "place": place,
+                        "lang": lang,
                         "download_url": download_url
                     }
                 }
@@ -1428,7 +1611,8 @@ def download_kundali(
     date: str = Query(...),
     time: str = Query(...),
     place: str = Query(...),
-    payment_id: str = Query(...)
+    payment_id: str = Query(...),
+    lang: str = Query("en")
 ):
     """Download Kundali PDF - Requires Verified Payment"""
     
@@ -1464,13 +1648,15 @@ def download_kundali(
         
         print(f"Decoded - Date: {date}, Time: {time}, Place: {place}")
         
-        pdf_payload = {"date": date, "time": time, "place": place, "lang": "en"}
+        formatted_time = format_time_for_api(time)
+        pdf_payload = {"date": date, "time": formatted_time, "place": place, "lang": (lang or "en").lower()}
         
         try:
             pdf_response = requests.post(
                 KUNDALI_PDF_API,
                 json=pdf_payload,
-                timeout=30
+                timeout=30,
+                verify=False
             )
             
             print(f"PDF API Response Status: {pdf_response.status_code}")

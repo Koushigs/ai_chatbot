@@ -516,11 +516,26 @@
             }
         });
 
-        // ✅ PAGE LOAD - SHOW WELCOME AND CHECK FOR PAYMENT
+        // ✅ PAGE LOAD - RESTORE SESSION OR SHOW WELCOME, AND CHECK FOR PAYMENT
         window.addEventListener('load', () => {
             console.log('📄 Page load event fired');
 
-            addAssistantMessage('🌙 Welcome to Bharat Calendar AI!\n\nI can help you with:\n🌙 Janmarashi (Moon Sign)\n📊 Kundali (Birth Chart)\n🔮 Horoscope\n📅 Panchang\n✨ And much more!\n\nHow can I assist you today?');
+            const savedHTML = sessionStorage.getItem('savedChatMessages');
+            const savedHistory = sessionStorage.getItem('savedChatHistory');
+
+            if (savedHTML) {
+                console.log('🔄 Restoring previous chat messages from session storage');
+                document.getElementById('chatMessages').innerHTML = savedHTML;
+                if (savedHistory) {
+                    try {
+                        chatHistory = JSON.parse(savedHistory);
+                    } catch (e) {
+                        console.error('Error parsing saved history:', e);
+                    }
+                }
+            } else {
+                addAssistantMessage('🌙 Welcome to Bharat Calendar AI!\n\nI can help you with:\n🌙 Janmarashi (Moon Sign)\n📊 Kundali (Birth Chart)\n🔮 Horoscope\n📅 Panchang\n✨ And much more!\n\nHow can I assist you today?');
+            }
 
             // ✅ Check for payment data immediately
             checkForPaymentData();
@@ -607,7 +622,7 @@
                     const linkHtml = `
                         <div class="payment-link">
                             <strong>${link.title}</strong><br>
-                            <a href="${link.url}" target="_blank">
+                            <a href="${link.url}" target="_blank" rel="opener">
                                 💳 Open Payment Page
                             </a>
                         </div>
@@ -730,6 +745,9 @@
 
             box.scrollTop = box.scrollHeight;
 
+            // ✅ Save updated chat state
+            saveChatState();
+
             // ✅ Clear paymentCompleted so it doesn't show up again in future sessions
             localStorage.removeItem('paymentCompleted');
         }
@@ -831,8 +849,20 @@
         }
 
         // =============================================
-        // ADD MESSAGES TO CHAT
+        // ADD MESSAGES TO CHAT & SAVE SESSION
         // =============================================
+
+        function saveChatState() {
+            try {
+                const box = document.getElementById('chatMessages');
+                if (box) {
+                    sessionStorage.setItem('savedChatMessages', box.innerHTML);
+                    sessionStorage.setItem('savedChatHistory', JSON.stringify(chatHistory));
+                }
+            } catch (e) {
+                console.warn('Failed to save chat state:', e);
+            }
+        }
 
         function addUserMessage(text) {
             const box = document.getElementById('chatMessages');
@@ -841,6 +871,7 @@
             msg.innerHTML = `<div class="text">${escapeHtml(text)}</div>`;
             box.appendChild(msg);
             chatHistory.push({ role: 'user', content: text });
+            saveChatState();
         }
 
         function addAssistantMessage(text) {
@@ -849,6 +880,7 @@
             msg.className = 'message assistant-message';
             msg.innerHTML = `<div class="text">${formatMessage(text)}</div>`;
             box.appendChild(msg);
+            saveChatState();
         }
 
         function escapeHtml(text) {

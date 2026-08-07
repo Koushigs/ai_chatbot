@@ -114,6 +114,30 @@ class RecommendationEligibilityEngine:
                 }
 
         # ========================================================
+        # RULE 2c: MUHURTA / VEHICLE / PROPERTY TIMING SUPPRESSION
+        # ========================================================
+        muhurta_or_asset_keywords = [
+            "muhurat", "muhurtham", "subha muruth", "shubh muhurat", "auspicious time",
+            "good time to buy", "best time to buy", "car", "vehicle", "bike", "scooter",
+            "house", "property", "flat", "land", "plot", "automobile"
+        ]
+        remedy_explicit_keywords = [
+            "gemstone", "rudraksha", "yantra", "rashi stone", "lucky stone", "ring",
+            "pendant", "mala", "pyramid", "idol", "statue", "रत्न", "रुद्राक्ष"
+        ]
+        
+        has_asset_or_muhurta = any(kw in user_lower for kw in muhurta_or_asset_keywords)
+        has_explicit_remedy = any(kw in user_lower for kw in remedy_explicit_keywords)
+
+        if has_asset_or_muhurta and not has_explicit_remedy:
+            return {
+                "should_recommend": False,
+                "reason": "Muhurta or vehicle/property timing query - affiliate products suppressed.",
+                "score": 0,
+                "max_products": 0
+            }
+
+        # ========================================================
         # RULE 3: SESSION FREQUENCY / COOLDOWN CONTROL
         # ========================================================
         if self.config.get("enable_frequency_control", True) and conversation_hash:
