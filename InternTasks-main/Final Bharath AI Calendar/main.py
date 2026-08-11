@@ -97,7 +97,7 @@ KUNDALI_KEYWORDS = [
 PREDICTIVE_CATEGORIES = {
     "marriage": [
         # English & Hinglish
-        "shaadi", "shadi", "vivah", "marriage", "get married", "marry", "wedding", "spouse", "husband", "wife",
+        "shaadi", "shadi", "vivah", "marriage", "married", "get married", "marry", "wedding", "spouse", "husband", "wife",
         "life partner", "marriage timing", "love marriage", "arranged marriage", "second marriage",
         # Hindi
         "शादी", "विवाह", "जीवनसाथी", "दूल्हा", "दुल्हन", "पति", "पत्नी",
@@ -380,14 +380,6 @@ def detect_tool_type_multilingual(user_query: str, ai_response: str, messages: O
             return "kundali"
 
     # ==========================================
-    # PRIORITY 1.5: PREDICTIVE / ASTROLOGY QUESTIONS
-    # ==========================================
-    pred_category = detect_predictive_category(normalized)
-    if pred_category:
-        safe_print(f"✅ PREDICTIVE CONFIRMED: Category '{pred_category}'")
-        return f"predictive_{pred_category}"
-
-    # ==========================================
     # PRIORITY 2: JANMARASHI
     # ==========================================
     for keyword in JANMARASHI_KEYWORDS:
@@ -405,6 +397,14 @@ def detect_tool_type_multilingual(user_query: str, ai_response: str, messages: O
     if birth_info and any(w in normalized for w in ["rashi", "rashee", "raasi", "sign", "moon", "birth", "janma", "janam", "janmma"]):
         safe_print("✅ JANMARASHI CONFIRMED: Birth details + Rashi/Moon keywords detected")
         return "janmarashi"
+
+    # ==========================================
+    # PRIORITY 3: PREDICTIVE / ASTROLOGY QUESTIONS
+    # ==========================================
+    pred_category = detect_predictive_category(normalized)
+    if pred_category:
+        safe_print(f"✅ PREDICTIVE CONFIRMED: Category '{pred_category}'")
+        return f"predictive_{pred_category}"
 
     # ==========================================
     # PRIORITY 3: PANCHANG
@@ -445,13 +445,18 @@ def detect_tool_type_multilingual(user_query: str, ai_response: str, messages: O
     if messages:
         current_birth_details = extract_birth_details(user_query)
         if current_birth_details:
-            history_text = " ".join(str(m.get("content", "")).lower() for m in messages if isinstance(m, dict))
-            if any(kw in history_text for kw in KUNDALI_KEYWORDS) or any(kw in history_text for kw in ["kundali", "kundli", "chart", "personalized kundali report"]) or any(kw in history_text for kw in PREDICTIVE_KEYWORDS):
-                safe_print("✅ KUNDALI CONFIRMED via history context + current birth details")
-                return "kundali"
-            elif any(kw in history_text for kw in JANMARASHI_KEYWORDS) or re.search(r'\bja?n+a?m+[a-z]*\s*(?:r[a-z]*sh[a-z]*|r[a-z]*s[a-z]*|sign|moon|patrika)?\b', history_text):
-                safe_print("✅ JANMARASHI CONFIRMED via history context + current birth details")
-                return "janmarashi"
+            for m in reversed(messages):
+                if isinstance(m, dict) and m.get("role") == "user":
+                    user_content = str(m.get("content", "")).lower()
+                    if any(kw in user_content for kw in KUNDALI_KEYWORDS):
+                        safe_print("✅ KUNDALI CONFIRMED via history context + current birth details")
+                        return "kundali"
+                    if any(kw in user_content for kw in JANMARASHI_KEYWORDS) or re.search(r'\bja?n+a?m+[a-z]*\s*(?:r[a-z]*sh[a-z]*|r[a-z]*s[a-z]*|sign|moon|patrika)?\b', user_content):
+                        safe_print("✅ JANMARASHI CONFIRMED via history context + current birth details")
+                        return "janmarashi"
+                    if any(kw in user_content for kw in PREDICTIVE_KEYWORDS):
+                        safe_print("✅ KUNDALI CONFIRMED via predictive history context + current birth details")
+                        return "kundali"
 
     safe_print(f"❌ No tool type detected")
     return None
@@ -1042,23 +1047,23 @@ def fallback_calculate_janmarashi(date_str: str, time_str: str, place_str: str) 
 def call_janmarashi_api(date: str, time: str, place: str, lang: str = "en") -> Optional[Dict]:
     """Call Janmarashi API with intelligent fallback"""
     try:
-        print(f"🔮 Calling Janmarashi API: {date}, {time}, {place}, lang={lang}")
+        safe_print(f"🔮 Calling Janmarashi API: {date}, {time}, {place}, lang={lang}")
         payload = {"date": date, "time": time, "place": place, "lang": lang.lower()}
         response = requests.post(JANMARASHI_API, json=payload, timeout=10, verify=False)
 
         if response.status_code == 200:
             data = response.json()
             if data.get("success"):
-                print(f"✅ API Success: {data['moonRashi']}")
+                safe_print(f"✅ API Success: {data['moonRashi']}")
                 return {
                     "moonRashi": data["moonRashi"],
                     "moonLongitude": data.get("moonLongitude"),
                     "location": data.get("location", {})
                 }
     except Exception as e:
-        print(f"❌ Janmarashi API error: {e}")
+        safe_print(f"❌ Janmarashi API error: {e}")
     
-    print("⚠️ Falling back to built-in Janmarashi calculation...")
+    safe_print("⚠️ Falling back to built-in Janmarashi calculation...")
     return fallback_calculate_janmarashi(date, time, place)
 
 
@@ -1349,14 +1354,14 @@ def invoke_agent(request: QueryRequest, http_request: Request):
     safe_print(f"   Score: {decision['score']}")
     safe_print(f"   Reason: {decision['reason']}")
 
-    print(f"\n{'='*70}")
-    print("STEP 2: Generate Recommendations & Links")
-    print(f"{'='*70}")
+    safe_print(f"\n{'='*70}")
+    safe_print("STEP 2: Generate Recommendations & Links")
+    safe_print(f"{'='*70}")
 
     if tool_type == "janmarashi":
-        print(f"\n{'='*70}")
-        print("🔮 JANMARASHI FLOW - ASK FOR CONFIRMATION")
-        print(f"{'='*70}")
+        safe_print(f"\n{'='*70}")
+        safe_print("🔮 JANMARASHI FLOW - ASK FOR CONFIRMATION")
+        safe_print(f"{'='*70}")
 
         birth_details = extract_birth_details_from_history(current_messages)
         if birth_details:
@@ -1366,8 +1371,8 @@ def invoke_agent(request: QueryRequest, http_request: Request):
                 "created_at": datetime.now().isoformat()
             }
             
-            print(f"✅ Stored pending janmarashi request: {conversation_hash}")
-            print(f"📝 Birth Details: {birth_details}")
+            safe_print(f"✅ Stored pending janmarashi request: {conversation_hash}")
+            safe_print(f"📝 Birth Details: {birth_details}")
 
             lang_display = LANG_DISPLAY_NAMES.get(birth_details.get('lang', 'en').lower(), 'English')
             content_lines = [
@@ -1499,42 +1504,54 @@ def invoke_agent(request: QueryRequest, http_request: Request):
         # Sanitize LLM response to ensure NO duplicated sales/upsell/pricing text from LLM
         clean_response = sanitize_predictive_response(clean_response)
 
-        birth_details = extract_birth_details_from_history(current_messages)
-        if birth_details:
-            pending_payment_requests[conversation_hash] = {
-                "birth_details": birth_details,
-                "product_type": "kundali",
-                "created_at": datetime.now().isoformat()
+        if decision.get("should_recommend", True):
+            links["report_upsell"] = {
+                "type": "kundali_offer",
+                "price": KUNDALI_PRICE,
+                "cta": "Get your detailed Kundali report"
             }
-            safe_print(f"✅ Stored pending kundali request via predictive flow: {conversation_hash}")
+            eligibility_engine.record_recommendation_served(conversation_hash, len(current_messages))
+            safe_print(f"✅ Kundali report_upsell attached & recorded for conversation: {conversation_hash}")
 
-            lang_display = LANG_DISPLAY_NAMES.get(birth_details.get('lang', 'en').lower(), 'English')
-            content_lines = [
-                clean_response,
-                "",
-                offer_text,
-                "",
-                "✅ Birth details found:",
-                f"  📅 Date: {birth_details['date']}",
-                f"  🕐 Time: {birth_details['time']}",
-                f"  📍 Place: {birth_details['place']}",
-                f"  🌐 Selected Language: {lang_display}",
-                "",
-                "💰 Cost: ₹199 (One-time payment)",
-                "",
-                "Do you want to proceed with payment?",
-                "(Reply: yes or no)"
-            ]
-            complete_chat[-1]["content"] = "\n".join(content_lines)
-            parsed_data = {
-                "status": "awaiting_payment_confirmation",
-                "birth_details": birth_details,
-                "conversation_hash": conversation_hash,
-                "product_type": "kundali",
-                "amount": f"₹{KUNDALI_PRICE}"
-            }
+            birth_details = extract_birth_details_from_history(current_messages)
+            if birth_details:
+                pending_payment_requests[conversation_hash] = {
+                    "birth_details": birth_details,
+                    "product_type": "kundali",
+                    "created_at": datetime.now().isoformat()
+                }
+                safe_print(f"✅ Stored pending kundali request via predictive flow: {conversation_hash}")
+
+                lang_display = LANG_DISPLAY_NAMES.get(birth_details.get('lang', 'en').lower(), 'English')
+                content_lines = [
+                    clean_response,
+                    "",
+                    offer_text,
+                    "",
+                    "✅ Birth details found:",
+                    f"  📅 Date: {birth_details['date']}",
+                    f"  🕐 Time: {birth_details['time']}",
+                    f"  📍 Place: {birth_details['place']}",
+                    f"  🌐 Selected Language: {lang_display}",
+                    "",
+                    "💰 Cost: ₹199 (One-time payment)",
+                    "",
+                    "Do you want to proceed with payment?",
+                    "(Reply: yes or no)"
+                ]
+                complete_chat[-1]["content"] = "\n".join(content_lines)
+                parsed_data = {
+                    "status": "awaiting_payment_confirmation",
+                    "birth_details": birth_details,
+                    "conversation_hash": conversation_hash,
+                    "product_type": "kundali",
+                    "amount": f"₹{KUNDALI_PRICE}"
+                }
+            else:
+                complete_chat[-1]["content"] = f"{clean_response}\n\n{offer_text}"
         else:
-            complete_chat[-1]["content"] = f"{clean_response}\n\n{offer_text}"
+            safe_print(f"ℹ️ Predictive Kundali recommendation suppressed due to eligibility/cooldown engine.")
+            complete_chat[-1]["content"] = clean_response
 
     elif decision["should_recommend"]:
         try:

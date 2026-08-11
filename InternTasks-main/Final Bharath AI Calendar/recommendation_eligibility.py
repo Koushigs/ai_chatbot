@@ -9,7 +9,7 @@ import re
 
 DEFAULT_CONFIG: Dict[str, Any] = {
     "minimum_score": 50,
-    "cooldown_replies": 1,
+    "cooldown_replies": 2,
     "maximum_products": 3,
     "enable_intent_detection": True,
     "enable_context_rules": True,
@@ -190,8 +190,8 @@ class RecommendationEligibilityEngine:
                 score += 35
                 reasons.append("Gemstone/Rudraksha/Remedy selection")
 
-            # Horoscope / Panchang / Festival tool context (+50)
-            if tool_type in ["horoscope", "panchang", "monthly_festivals", "holidays"]:
+            # Horoscope / Panchang / Festival / Predictive tool context (+50)
+            if tool_type in ["horoscope", "panchang", "monthly_festivals", "holidays"] or (tool_type and tool_type.startswith("predictive")):
                 score += 50
                 reasons.append(f"Tool context matched: {tool_type}")
 
