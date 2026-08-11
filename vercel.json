@@ -1,0 +1,14 @@
+{
+  "builds": [
+    {
+      "src": "InternTasks-main/Final Bharath AI Calendar/main.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "InternTasks-main/Final Bharath AI Calendar/main.py"
+    }
+  ]
+}
