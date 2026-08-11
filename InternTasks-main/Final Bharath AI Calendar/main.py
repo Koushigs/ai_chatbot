@@ -90,6 +90,144 @@ KUNDALI_KEYWORDS = [
     "ਕੁੰਡਲੀ", "ਜਨਮ ਪੱਤਰੀ",
 ]
 
+# =============================================
+# 🔮 PREDICTIVE / ASTROLOGY KEYWORDS (ALL 10 SUPPORTED LANGUAGES)
+# Categories: marriage, career, love, children, future
+# =============================================
+PREDICTIVE_CATEGORIES = {
+    "marriage": [
+        # English & Hinglish
+        "shaadi", "shadi", "vivah", "marriage", "get married", "marry", "wedding", "spouse", "husband", "wife",
+        "life partner", "marriage timing", "love marriage", "arranged marriage", "second marriage",
+        # Hindi
+        "शादी", "विवाह", "जीवनसाथी", "दूल्हा", "दुल्हन", "पति", "पत्नी",
+        # Tamil
+        "திருமணம்", "கல்யாணம்", "வாழ்க்கைத்துணை",
+        # Telugu
+        "వివాహం", "పెళ్లి", "జీవిత భాగస్వామి",
+        # Kannada
+        "ಮದುವೆ", "ವಿವಾಹ", "ಜೀವನ ಸಂಗಾತಿ",
+        # Malayalam
+        "വിവാഹം", "കല്യാണം", "ജീവിതപങ്കാളി",
+        # Marathi
+        "लग्न", "विवाह", "आयुष्यमान",
+        # Gujarati
+        "લગ્ન", "વિવાહ", "જીવનસાથી",
+        # Bengali
+        "বিয়ে", "বিবাহ", "জীবনসঙ্গী",
+        # Odia
+        "ବିବାହ", "ବାହାଘର", "ଜୀବନସାଥୀ",
+    ],
+    "career": [
+        # English & Hinglish
+        "career", "naukri", "job", "employment", "promotion", "business", "work life", "profession", "placement",
+        "kam dhandha", "karobar", "vyapar",
+        # Hindi
+        "करियर", "नौकरी", "जॉब", "व्यापार", "प्रमोशन", "रोजगार", "कारोबार",
+        # Tamil
+        "வேலை", "தொழில்", "பதவி உயர்வு", "வியாபாரம்",
+        # Telugu
+        "ఉద్యోగం", "కెరీర్", "వ్యాపారం", "ప్రమోషన్",
+        # Kannada
+        "ಕೆಲಸ", "ಉದ್ಯೋಗ", "ವೃತ್ತಿಜೀವನ", "ವ್ಯಾಪಾರ",
+        # Malayalam
+        "ജോലി", "കരിയർ", "ബിസിനസ്", "തൊഴിൽ",
+        # Marathi
+        "नोकरी", "करिअर", "व्यवसाय", "बढती", "रोजगार",
+        # Gujarati
+        "નોકરી", "કરિયર", "ધંધો", "પ્રમોશન", "રોજગાર",
+        # Bengali
+        "চাকরি", "ক্যারিয়ার", "ব্যবসা", "উন্নতি", "কর্মজীবন",
+        # Odia
+        "ଚାକିରି", "କ୍ୟାରିଅର୍", "ବ୍ୟବସାୟ", "ପ୍ରମୋସନ୍",
+    ],
+    "love": [
+        # English & Hinglish
+        "love life", "relationship", "romance", "boyfriend", "girlfriend", "partner", "soulmate", "love marriage",
+        "pyaar", "pyar", "love", "find love",
+        # Hindi
+        "लव लाइफ", "प्रेम संबंध", "प्यार", "रिलेशनशिप", "प्रेम जीवन", "सच्चा प्यार",
+        # Tamil
+        "காதல்", "உறவு", "காதல் வாழ்க்கை",
+        # Telugu
+        "ప్రేమ", "సంబంధం", "ప్రేమ జీవితం",
+        # Kannada
+        "ಪ್ರೀತಿ", "ಸಂಬಂಧ", "ಪ್ರೀತಿಯ ಜೀವನ",
+        # Malayalam
+        "പ്രണയം", "ബന്ധം", "പ്രണയജീവിതം",
+        # Marathi
+        "प्रेम", "नातेसंबंध", "प्रेम जीवन",
+        # Gujarati
+        "પ્રેમ", "સંબંધ", "પ્રેમ જીવન",
+        # Bengali
+        "প্রেম", "সম্পর্ক", "ভালোবাসা", "প্রেম জীবন",
+        # Odia
+        "ପ୍ରେମ", "ସମ୍ପର୍କ", "ପ୍ରେମ ଜୀବନ",
+    ],
+    "children": [
+        # English & Hinglish
+        "children", "kids", "child", "baby", "pregnancy", "childbirth", "santan", "santana", "bachche", "bachhe", "bacha",
+        # Hindi
+        "बच्चे", "संतान", "संतान सुख", "संतान योग", "बच्चा", "पुत्र", "पुत्री",
+        # Tamil
+        "குழந்தைகள்", "குழந்தை", "குழந்தை பாக்கியம்", "மகப்பேறு",
+        # Telugu
+        "పిల్లలు", "సంతానం", "సంతాన యోగం",
+        # Kannada
+        "ಮಕ್ಕಳು", "ಸಂತಾನ", "ಸಂತಾನ ಭಾಗ್ಯ",
+        # Malayalam
+        "കുട്ടികൾ", "സന്താനം", "സന്താനഭാഗ്യം",
+        # Marathi
+        "मुले", "बाळ", "संतान", "संतान सुख",
+        # Gujarati
+        "બાળકો", "સંતાન", "સંતાન સુખ",
+        # Bengali
+        "সন্তান", "বাচ্চা", "সন্তান লাভ",
+        # Odia
+        "ଛୁଆ", "ସନ୍ତାନ", "ସନ୍ତାନ ସୁଖ",
+    ],
+    "future": [
+        # English & Hinglish
+        "future", "destiny", "fate", "bhavishya", "bhavishyat", "life prediction", "what will happen", "aage kya",
+        "kismat", "bhagya", "general prediction", "future prediction",
+        # Hindi
+        "भविष्य", "आगे क्या होगा", "किस्मत", "भाग्य", "भविष्यफल", "मेरा भविष्य",
+        # Tamil
+        "எதிர்காலம்", "எதிர்கால வாழ்க்கை", "விதி", "ஜாதக பலன்",
+        # Telugu
+        "భవిష్యత్తు", "తలరాత", "జాతకం", "భవిష్యత్",
+        # Kannada
+        "ಭವಿಷ್ಯ", "ಭವಿಷ್ಯದ ಜೀವನ", "ವಿಧಿಯ ಬರಹ",
+        # Malayalam
+        "ഭാവി", "ഭാവി ജീവിതം", "വിധിയുടെ ഫലം",
+        # Marathi
+        "भविष्य", "भविष्यकाळ", "नशीब", "भाग्य",
+        # Gujarati
+        "ભવિષ્ય", "ભાગ્ય", "નસીબ",
+        # Bengali
+        "ভবিষ্যৎ", "ভাগ্য", "ভবিষ্যৎ বাণী",
+        # Odia
+        "ଭବિଷ୍ୟତ", "ଭାଗ୍ୟ", "ଭବିଷ୍ୟଫଳ",
+    ]
+}
+
+# Flattened list for fast top-level matching
+PREDICTIVE_KEYWORDS = [kw for cat_list in PREDICTIVE_CATEGORIES.values() for kw in cat_list]
+
+
+def detect_predictive_category(text: str) -> Optional[str]:
+    """Detect specific predictive category (marriage, career, love, children, future) from query."""
+    if not text:
+        return None
+    normalized = normalize_text(text)
+    
+    # Priority matching for explicit category intents
+    for category in ["marriage", "career", "love", "children", "future"]:
+        for keyword in PREDICTIVE_CATEGORIES[category]:
+            if re.search(rf"(?:^|\b|\s){re.escape(keyword)}(?:$|\b|\s)", normalized) or keyword in normalized:
+                return category
+    return None
+
 # 🆕 NEW: HOROSCOPE_RASHI_KEYWORDS - ALL ZODIAC SIGNS + HOROSCOPE TERMS
 HOROSCOPE_RASHI_KEYWORDS = [
     # English (zodiac signs)
@@ -242,6 +380,14 @@ def detect_tool_type_multilingual(user_query: str, ai_response: str, messages: O
             return "kundali"
 
     # ==========================================
+    # PRIORITY 1.5: PREDICTIVE / ASTROLOGY QUESTIONS
+    # ==========================================
+    pred_category = detect_predictive_category(normalized)
+    if pred_category:
+        safe_print(f"✅ PREDICTIVE CONFIRMED: Category '{pred_category}'")
+        return f"predictive_{pred_category}"
+
+    # ==========================================
     # PRIORITY 2: JANMARASHI
     # ==========================================
     for keyword in JANMARASHI_KEYWORDS:
@@ -299,8 +445,8 @@ def detect_tool_type_multilingual(user_query: str, ai_response: str, messages: O
     if messages:
         current_birth_details = extract_birth_details(user_query)
         if current_birth_details:
-            history_text = " ".join(str(m.get("content", "")).lower() for m in messages if isinstance(m, dict) and m.get("role") == "user")
-            if any(kw in history_text for kw in KUNDALI_KEYWORDS) or any(kw in history_text for kw in ["kundali", "kundli", "chart"]):
+            history_text = " ".join(str(m.get("content", "")).lower() for m in messages if isinstance(m, dict))
+            if any(kw in history_text for kw in KUNDALI_KEYWORDS) or any(kw in history_text for kw in ["kundali", "kundli", "chart", "personalized kundali report"]) or any(kw in history_text for kw in PREDICTIVE_KEYWORDS):
                 safe_print("✅ KUNDALI CONFIRMED via history context + current birth details")
                 return "kundali"
             elif any(kw in history_text for kw in JANMARASHI_KEYWORDS) or re.search(r'\bja?n+a?m+[a-z]*\s*(?:r[a-z]*sh[a-z]*|r[a-z]*s[a-z]*|sign|moon|patrika)?\b', history_text):
@@ -359,28 +505,6 @@ def extract_birth_details_from_history(messages: List[Dict[str, Any]]) -> Option
     return None
 
 
-CITY_ALIASES = {
-    "shivamoga": "Shivamogga",
-    "shivamogaa": "Shivamogga",
-    "shimoga": "Shimoga",
-    "bengaluru": "Bengaluru",
-    "bangalore": "Bengaluru",
-    "mysuru": "Mysuru",
-    "mysore": "Mysore",
-    "hubballi": "Hubballi",
-    "hubli": "Hubli",
-    "mangaluru": "Mangaluru",
-    "mangalore": "Mangalore",
-    "belagavi": "Belagavi",
-    "belgaum": "Belgaum",
-    "kalaburagi": "Kalaburagi",
-    "gulbarga": "Gulbarga",
-    "ballari": "Ballari",
-    "bellary": "Bellary",
-    "davanagere": "Davanagere",
-    "davangere": "Davanagere",
-}
-
 def normalize_city_name(city: str) -> str:
     if not city:
         return city
@@ -391,9 +515,6 @@ def normalize_city_name(city: str) -> str:
     ).strip(' :=-')
     if not clean_city:
         clean_city = city.strip()
-    c_lower = clean_city.lower()
-    if c_lower in CITY_ALIASES:
-        return CITY_ALIASES[c_lower]
     return clean_city.title()
 
 
@@ -504,8 +625,11 @@ def extract_birth_details(text: str) -> Optional[Dict[str, str]]:
         remainder = re.sub(r'\b(?:in|language|lang)\s+(?:kannada|hindi|tamil|telugu|malayalam|marathi|gujarati|bengali|odia|english)\b', '', remainder, flags=re.IGNORECASE)
         remainder = re.sub(r'\b(?:kannada|hindi|tamil|telugu|malayalam|marathi|gujarati|bengali|odia|english)\b', '', remainder, flags=re.IGNORECASE)
         
-        # Remove field label keywords (date, time, place, location, city, dob, tob, pob, details) from remainder
-        remainder = re.sub(r'\b(?:date|time|place|location|city|dob|tob|pob|details)\b', '', remainder, flags=re.IGNORECASE)
+        # Remove field label keywords and prompt verbs (including typos like ganerate/generate/create) from remainder
+        remainder = re.sub(
+            r'\b(?:i|want|need|please|pls|can|you|generate|ganerate|generat|genrate|create|make|show|get|calculate|tell|send|me|my|for|in|at|city|place|location|date|time|dob|tob|pob|details|report|reports|chart|pdf|kundali|kundli|janmarashi|janma|janam|janmma|rashi|rashee|raasi| के|लिए|की|में|ನನ್ನ|ಜನ್ಮ|ರಾಶಿ|ಲೆಕ್ಕಾಚಾರ|ಮಾಡಿ)\b',
+            ' ', remainder, flags=re.IGNORECASE
+        )
 
         parts = [p.strip() for p in remainder.split(",") if p.strip()]
         valid_parts = []
@@ -517,7 +641,9 @@ def extract_birth_details(text: str) -> Optional[Dict[str, str]]:
             ).strip(' :=-')
             cleaned_part = re.sub(r'\b(?:report|reports|chart|pdf|details|kundali|kundli|janmarashi)\b', '', cleaned_part, flags=re.IGNORECASE).strip(' :=-')
             if cleaned_part and not re.match(r'^\d+$', cleaned_part) and not any(k in cleaned_part.lower() for k in ["janmarashi", "janma rashi", "janmma rashi", "kundali"]):
-                valid_parts.append(cleaned_part)
+                norm_p = normalize_city_name(cleaned_part)
+                if norm_p:
+                    valid_parts.append(norm_p)
 
         place_text = ", ".join(valid_parts) if valid_parts else "Unknown"
 
@@ -798,6 +924,45 @@ def clean_markdown(text: str) -> str:
     text = text.strip()
     
     return text
+
+
+def sanitize_predictive_response(text: str) -> str:
+    """Strips any LLM-generated Kundali sales pitches, price/cost mentions (₹199), or payment prompts."""
+    if not text:
+        return ""
+    
+    lines = text.split("\n")
+    cleaned_lines = []
+    
+    upsell_patterns = [
+        r"₹\s*199",
+        r"199\s*(inr|rupees|rs|\?)",
+        r"\b199\b",
+        r"cost.*(kundali|report|service)",
+        r"price.*(kundali|report|service)",
+        r"detailed.*kundali.*report",
+        r"personalized.*kundali.*report",
+        r"proceed with payment",
+        r"reply:?\s*yes or no",
+        r"share your birth date",
+        r"prepare your personalized kundali",
+        r"buy.*kundali",
+        r"order.*kundali",
+        r"purchase.*kundali",
+        r"pay.*₹",
+        r"payment of ₹",
+    ]
+    
+    for line in lines:
+        line_lower = line.lower()
+        if any(re.search(pat, line_lower) for pat in upsell_patterns):
+            continue
+        cleaned_lines.append(line)
+        
+    result = "\n".join(cleaned_lines).strip()
+    if not result:
+        result = "In Vedic astrology, planetary Dashas, transits, and house positions shape key life events. A complete birth chart analysis is required for detailed insights."
+    return result
 
 
 def create_razorpay_order(product_type: str, birth_details: Dict[str, str]) -> Optional[Dict]:
@@ -1314,6 +1479,63 @@ def invoke_agent(request: QueryRequest, http_request: Request):
             ]
             complete_chat[-1]["content"] = "\n".join(content_lines)
 
+    elif tool_type and tool_type.startswith("predictive"):
+        safe_print(f"\n{'='*70}")
+        safe_print(f"🔮 PREDICTIVE FLOW - CATEGORY: {tool_type}")
+        safe_print(f"{'='*70}")
+
+        category = tool_type.replace("predictive_", "")
+        
+        offer_texts = {
+            "marriage": "For a detailed marriage-timing analysis based on your exact birth chart, I can prepare your personalized Kundali report (₹199). Share your birth date, time, and place.",
+            "career": "For a detailed career analysis based on your exact birth chart, I can prepare your personalized Kundali report (₹199). Share your birth date, time, and place.",
+            "love": "For a detailed relationship analysis based on your exact birth chart, I can prepare your personalized Kundali report (₹199). Share your birth date, time, and place.",
+            "children": "For a detailed children and family analysis based on your exact birth chart, I can prepare your personalized Kundali report (₹199). Share your birth date, time, and place.",
+            "future": "For a detailed personalized Kundali analysis based on your exact birth chart, I can prepare your personalized Kundali report (₹199). Share your birth date, time, and place."
+        }
+        
+        offer_text = offer_texts.get(category, offer_texts["future"])
+
+        # Sanitize LLM response to ensure NO duplicated sales/upsell/pricing text from LLM
+        clean_response = sanitize_predictive_response(clean_response)
+
+        birth_details = extract_birth_details_from_history(current_messages)
+        if birth_details:
+            pending_payment_requests[conversation_hash] = {
+                "birth_details": birth_details,
+                "product_type": "kundali",
+                "created_at": datetime.now().isoformat()
+            }
+            safe_print(f"✅ Stored pending kundali request via predictive flow: {conversation_hash}")
+
+            lang_display = LANG_DISPLAY_NAMES.get(birth_details.get('lang', 'en').lower(), 'English')
+            content_lines = [
+                clean_response,
+                "",
+                offer_text,
+                "",
+                "✅ Birth details found:",
+                f"  📅 Date: {birth_details['date']}",
+                f"  🕐 Time: {birth_details['time']}",
+                f"  📍 Place: {birth_details['place']}",
+                f"  🌐 Selected Language: {lang_display}",
+                "",
+                "💰 Cost: ₹199 (One-time payment)",
+                "",
+                "Do you want to proceed with payment?",
+                "(Reply: yes or no)"
+            ]
+            complete_chat[-1]["content"] = "\n".join(content_lines)
+            parsed_data = {
+                "status": "awaiting_payment_confirmation",
+                "birth_details": birth_details,
+                "conversation_hash": conversation_hash,
+                "product_type": "kundali",
+                "amount": f"₹{KUNDALI_PRICE}"
+            }
+        else:
+            complete_chat[-1]["content"] = f"{clean_response}\n\n{offer_text}"
+
     elif decision["should_recommend"]:
         try:
             if tool_type == "horoscope":
@@ -1344,7 +1566,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
     else:
         recommendations = {}
 
-    has_recommendations = bool(recommendations) and tool_type not in ["kundali", "janmarashi"]
+    has_recommendations = bool(recommendations) and tool_type not in ["kundali", "janmarashi"] and not (tool_type and tool_type.startswith("predictive"))
 
     # 🛍️ PRINT RECOMMENDED PRODUCT LINKS IN BACKEND TERMINAL IN EXACT USER SUMMARY FORMAT
     recommended_items = print_recommended_links_to_terminal(

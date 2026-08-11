@@ -1,5 +1,5 @@
 {
-  "timestamp": 1786121920.0982685,
+  "timestamp": 1786440742.4697225,
   "items": [
     {
       "_id": "661537fcf3e1e40fb0e58882",
@@ -13,11 +13,11 @@
       ],
       "price": "₹899.00",
       "discountedPrice": "₹349.00",
-      "views": 18,
+      "views": 25,
       "translations": [],
       "createdAt": "2024-04-09T12:43:40.352Z",
       "__v": 0,
-      "weeklyViews": 0
+      "weeklyViews": 7
     },
     {
       "_id": "661682f2eb8782cb1acd4d31",
@@ -31,8 +31,8 @@
       ],
       "price": "₹999",
       "discountedPrice": "₹399",
-      "views": 2,
-      "weeklyViews": 0,
+      "views": 22,
+      "weeklyViews": 20,
       "translations": [],
       "createdAt": "2024-04-10T12:15:46.089Z",
       "__v": 0
@@ -49,8 +49,8 @@
       ],
       "price": "₹499",
       "discountedPrice": "₹110",
-      "views": 0,
-      "weeklyViews": 0,
+      "views": 1,
+      "weeklyViews": 1,
       "translations": [],
       "createdAt": "2024-04-10T12:20:27.649Z",
       "__v": 0
@@ -103,8 +103,8 @@
       ],
       "price": "₹2,499",
       "discountedPrice": "₹69",
-      "views": 0,
-      "weeklyViews": 0,
+      "views": 4,
+      "weeklyViews": 4,
       "translations": [],
       "createdAt": "2024-04-15T10:26:10.415Z",
       "__v": 0
@@ -175,8 +175,8 @@
       ],
       "price": "₹1,999",
       "discountedPrice": "₹599",
-      "views": 0,
-      "weeklyViews": 0,
+      "views": 44,
+      "weeklyViews": 44,
       "translations": [],
       "createdAt": "2024-05-11T05:38:20.439Z",
       "__v": 0
@@ -535,8 +535,8 @@
       ],
       "price": "₹NaN",
       "discountedPrice": "₹199",
-      "views": 0,
-      "weeklyViews": 0,
+      "views": 1,
+      "weeklyViews": 1,
       "translations": [],
       "createdAt": "2024-06-17T06:01:00.300Z",
       "__v": 0
@@ -1327,8 +1327,8 @@
       ],
       "price": "₹2,499",
       "discountedPrice": "₹289",
-      "views": 0,
-      "weeklyViews": 0,
+      "views": 1,
+      "weeklyViews": 1,
       "translations": [],
       "createdAt": "2024-09-03T03:59:23.666Z",
       "__v": 0
@@ -1500,7 +1500,7 @@
       "asin": "B0DCKBLBBW",
       "category": "6663f1e6d2d35cf076b0a8c5",
       "title": "Rudram MATA Durga Maa Vashno Devi Murti Statue Idol for Pooja",
-      "link": "https://www.amazon.in/dp/B0DCKBLBBW?tag=mobilestartup-21&linkCode=ogi&th=1&psc=1",
+      "link": "B0CPTCCD45",
       "description": "Rudram MATA Durga Maa Vashno Devi Murti Statue Idol for Pooja",
       "images": [
         "https://m.media-amazon.com/images/I/41yFxNpaMuL._SL500_.jpg"
@@ -1518,7 +1518,7 @@
       "asin": "B09YLR234S",
       "category": "6663f1e6d2d35cf076b0a8c5",
       "title": "Marble Finish Goddess Maa Durga Devi Idol Statue Sherawali MATA Rani Spiritual Puja Vastu Showpiece Fegurine Religious Murti Pooja Gift Item",
-      "link": "https://www.amazon.in/dp/B09YLR234S?tag=mobilestartup-21&linkCode=ogi&th=1&psc=1",
+      "link": "B09YLR234S",
       "description": "Marble Finish Goddess Maa Durga Devi Idol Statue Sherawali MATA Rani Spiritual Puja Vastu Showpiece Fegurine Religious Murti Pooja Gift Item",
       "images": [
         "https://m.media-amazon.com/images/I/51szR8JDCkL._SL500_.jpg"
@@ -1903,8 +1903,8 @@
       ],
       "price": "₹320",
       "discountedPrice": "₹304",
-      "views": 0,
-      "weeklyViews": 0,
+      "views": 1,
+      "weeklyViews": 1,
       "translations": [],
       "createdAt": "2024-11-28T10:56:34.813Z",
       "__v": 0
@@ -3901,8 +3901,8 @@
       ],
       "price": "₹699",
       "discountedPrice": "₹144",
-      "views": 0,
-      "weeklyViews": 0,
+      "views": 1,
+      "weeklyViews": 1,
       "translations": [],
       "createdAt": "2025-08-22T05:25:20.115Z",
       "__v": 0
