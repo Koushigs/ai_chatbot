@@ -1,5 +1,5 @@
 {
-  "timestamp": 1786512450.2234015,
+  "timestamp": 1786538770.0764344,
   "items": [
     {
       "_id": "661537fcf3e1e40fb0e58882",
@@ -13,11 +13,11 @@
       ],
       "price": "₹899.00",
       "discountedPrice": "₹349.00",
-      "views": 39,
+      "views": 46,
       "translations": [],
       "createdAt": "2024-04-09T12:43:40.352Z",
       "__v": 0,
-      "weeklyViews": 21
+      "weeklyViews": 28
     },
     {
       "_id": "661682f2eb8782cb1acd4d31",
@@ -31,8 +31,8 @@
       ],
       "price": "₹999",
       "discountedPrice": "₹399",
-      "views": 148,
-      "weeklyViews": 146,
+      "views": 197,
+      "weeklyViews": 195,
       "translations": [],
       "createdAt": "2024-04-10T12:15:46.089Z",
       "__v": 0
@@ -49,8 +49,8 @@
       ],
       "price": "₹499",
       "discountedPrice": "₹110",
-      "views": 7,
-      "weeklyViews": 7,
+      "views": 10,
+      "weeklyViews": 10,
       "translations": [],
       "createdAt": "2024-04-10T12:20:27.649Z",
       "__v": 0
@@ -103,8 +103,8 @@
       ],
       "price": "₹2,499",
       "discountedPrice": "₹69",
-      "views": 8,
-      "weeklyViews": 8,
+      "views": 9,
+      "weeklyViews": 9,
       "translations": [],
       "createdAt": "2024-04-15T10:26:10.415Z",
       "__v": 0
@@ -175,8 +175,8 @@
       ],
       "price": "₹1,999",
       "discountedPrice": "₹599",
-      "views": 150,
-      "weeklyViews": 150,
+      "views": 216,
+      "weeklyViews": 216,
       "translations": [],
       "createdAt": "2024-05-11T05:38:20.439Z",
       "__v": 0
@@ -499,8 +499,8 @@
       ],
       "price": "₹1,295",
       "discountedPrice": "₹899",
-      "views": 1,
-      "weeklyViews": 1,
+      "views": 2,
+      "weeklyViews": 2,
       "translations": [],
       "createdAt": "2024-06-11T05:44:59.154Z",
       "__v": 0
@@ -1201,8 +1201,8 @@
       ],
       "price": "₹3,999",
       "discountedPrice": "₹368",
-      "views": 0,
-      "weeklyViews": 0,
+      "views": 2,
+      "weeklyViews": 2,
       "translations": [],
       "createdAt": "2024-08-29T06:09:27.905Z",
       "__v": 0
@@ -1327,8 +1327,8 @@
       ],
       "price": "₹2,499",
       "discountedPrice": "₹289",
-      "views": 3,
-      "weeklyViews": 3,
+      "views": 7,
+      "weeklyViews": 7,
       "translations": [],
       "createdAt": "2024-09-03T03:59:23.666Z",
       "__v": 0
@@ -2929,8 +2929,8 @@
       ],
       "price": "₹1,299",
       "discountedPrice": "₹214",
-      "views": 5,
-      "weeklyViews": 5,
+      "views": 17,
+      "weeklyViews": 17,
       "translations": [],
       "createdAt": "2025-04-17T05:34:33.867Z",
       "__v": 0

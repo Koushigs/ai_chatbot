@@ -319,7 +319,7 @@ YES_KEYWORDS = [
     "അതെ", "സാധുവായി",
     "हो", "ठीक आहे", "मंजूर आहे",
     "হ্যাঁ", "ঠিক আছে", "স্বীকৃতি",
-    "ਹਾਂ", "ਠীਕ ਹੈ", "ਪ੍ਰਵਾਨਗਤੀ",
+    "ਹਾਂ", "ਠੀਕ ਹੈ", "ਪ੍ਰਵਾਨਗਤੀ",
 ]
 
 NO_KEYWORDS = [
@@ -398,7 +398,7 @@ def detect_tool_type_multilingual(user_query: str, ai_response: str, messages: O
         safe_print("✅ JANMARASHI CONFIRMED: Birth details + Rashi/Moon keywords detected")
         return "janmarashi"
 
-    # ==========================================
+
     # PRIORITY 3: PREDICTIVE / ASTROLOGY QUESTIONS
     # ==========================================
     pred_category = detect_predictive_category(normalized)
@@ -462,6 +462,63 @@ def detect_tool_type_multilingual(user_query: str, ai_response: str, messages: O
     return None
 
 
+def normalize_city_name(city: str) -> str:
+    if not city:
+        return city
+    # Strip noise words like report, reports, chart, pdf, details, kundali, kundli, generate, genetate
+    clean_city = re.sub(
+        r'\b(?:report|reports|chart|pdf|details|kundali|kundli|janmarashi|janma|janam|rashi|generate|ganerate|genetate|generat|genrate|create|make|show|get|calculate)\b',
+        '', city, flags=re.IGNORECASE
+    ).strip(' :=-,')
+    if not clean_city:
+        clean_city = city.strip()
+    return clean_city.title()
+
+
+def extract_language(text: str) -> str:
+    """
+    Extract language code for Kundali PDF API (en, hi, ta, kn, ml, te, mr, gu, bn, or).
+    Defaults strictly to English ('en') if no explicit language is requested.
+    """
+    if not text:
+        return "en"
+    
+    t_clean = text.lower().strip()
+    
+    # Strip leading generic greetings like 'hi', 'hello', 'hey' to avoid false positive 'hi' (Hindi)
+    t_clean = re.sub(r'^(?:hi|hello|hey|greetings|namaste)[,\s!.]+', '', t_clean)
+
+    # 1. Kannada
+    if re.search(r'\b(?:kannada|kanada|kannad)\b|[ನನ್ನಜನ್ಮಕುಂಡಲಿರಾಶಿಕ್ಅಆಇಈಉಊಋಎಏಐಒಓಔಕಖಗಘಙಚಛಜಝಞಟಠಡಢಣತಥದಧನಪಫಬಭಮಯರಲವಶಷసಹಳೞ]', t_clean):
+        return "kn"
+    # 2. Hindi
+    elif re.search(r'\b(?:hindi|hindu)\b|[अआइईउऊऋएऐओऔकखगघङचछजझञटठडढणतथदधनपफबभमयरलवशषसह]', t_clean):
+        return "hi"
+    # 3. Tamil
+    elif re.search(r'\b(?:tamil|tamizh)\b|[அஆஇஈஉஊஎஏஐஒஓஔகஙசஜஞடணதநபமயரலவழளறன]', t_clean):
+        return "ta"
+    # 4. Telugu
+    elif re.search(r'\b(?:telugu|telgu)\b|[అఆఇఈఉఊఋఎఏఐఒఓఔకఖగఘఙచఛజఝఞటఠడఢణతథదధనపఫబభమయరలవశಷసహ]', t_clean):
+        return "te"
+    # 5. Malayalam
+    elif re.search(r'\b(?:malayalam|kerala)\b|[അആഇഈഉഊഋഎഏഐഒഓഔകഖഗഘങചഛജഝഞടഠഡഢണതഥദധനപഫബഭമയരലവശഷസഹളഴറ]', t_clean):
+        return "ml"
+    # 6. Marathi
+    elif re.search(r'\bmarathi\b', t_clean):
+        return "mr"
+    # 7. Gujarati
+    elif re.search(r'\b(?:gujarati|gujrati)\b|[અઆઇઈઉઊઋએઐઓઔકખగઘઙચછજઝઞટઠડઢણતથદધનપફબભમયરલવશષసહળ]', t_clean):
+        return "gu"
+    # 8. Bengali
+    elif re.search(r'\b(?:bengali|bangla)\b|[অআইঈউঊঋএঐওঔকখগঘঙচছজঝঞটঠডঢণতথদধনপফবভময়رلশষসহள]', t_clean):
+        return "bn"
+    # 9. Odia
+    elif re.search(r'\b(?:odia|oriya)\b|[ଅଆଇଈଉଊଋଏଐଓୌକଖଗଘଙଚଛଜଝଞଟଠଡଢଣତଥଦଧନପଫବଭମଯରଲଵଶଷସହଳ]', t_clean):
+        return "or"
+    # 10. English (Default)
+    return "en"
+
+
 def is_yes_response(text: str) -> bool:
     """Check if user said YES in any language (including short slang like ya, yup, yeah)"""
     if not text:
@@ -472,12 +529,12 @@ def is_yes_response(text: str) -> bool:
     words = re.findall(r'\b\w+\b', normalized)
     for word in words:
         if word in ["yes", "y", "ya", "yaa", "yah", "yea", "yeah", "yep", "yup", "yess", "ok", "okay", "sure", "pay", "ha", "haan", "han"]:
-            print(f"✅ YES detected (word match): '{word}'")
+            safe_print(f"✅ YES detected (word match): '{word}'")
             return True
 
     for keyword in YES_KEYWORDS:
         if keyword in normalized:
-            print(f"✅ YES detected: '{keyword}'")
+            safe_print(f"✅ YES detected: '{keyword}'")
             return True
     return False
 
@@ -487,7 +544,7 @@ def is_no_response(text: str) -> bool:
     normalized = normalize_text(text)
     for keyword in NO_KEYWORDS:
         if keyword in normalized:
-            print(f"✅ NO detected: '{keyword}'")
+            safe_print(f"✅ NO detected: '{keyword}'")
             return True
     return False
 
@@ -508,63 +565,6 @@ def extract_birth_details_from_history(messages: List[Dict[str, Any]]) -> Option
             if details:
                 return details
     return None
-
-
-def normalize_city_name(city: str) -> str:
-    if not city:
-        return city
-    # Strip noise words like report, reports, chart, pdf, details, kundali, kundli
-    clean_city = re.sub(
-        r'\b(?:report|reports|chart|pdf|details|kundali|kundli|janmarashi|janma|janam|rashi)\b',
-        '', city, flags=re.IGNORECASE
-    ).strip(' :=-')
-    if not clean_city:
-        clean_city = city.strip()
-    return clean_city.title()
-
-
-def extract_language(text: str) -> str:
-    """
-    Extract language code for Kundali PDF API (en, hi, ta, kn, ml, te, mr, gu, bn, or).
-    Defaults strictly to English ('en') if no explicit language is requested.
-    """
-    if not text:
-        return "en"
-    
-    t_clean = text.lower().strip()
-    
-    # Strip leading generic greetings like 'hi', 'hello', 'hey' to avoid false positive 'hi' (Hindi)
-    t_clean = re.sub(r'^(?:hi|hello|hey|greetings|namaste)[,\s!.]+', '', t_clean)
-
-    # 1. Kannada
-    if re.search(r'\b(?:kannada|kanada|kannad)\b|[ನನ್ನಜನ್ಮಕುಂಡಲಿರಾಶಿಕ್ಅಆಇಈಉಊಋಎಏಐಒಓಔಕಖಗಘಙಚಛಜಝಞಟಠಡಢಣತಥದಧನಪಫಬಭಮಯರಱಲವಶಷಸಹಳೞ]', t_clean):
-        return "kn"
-    # 2. Hindi
-    elif re.search(r'\b(?:hindi|hindu)\b|[अआइईउऊऋएऐओऔकखगघङचछजझञटठडढणतथदधनपफबभमयरलवशषसह]', t_clean):
-        return "hi"
-    # 3. Tamil
-    elif re.search(r'\b(?:tamil|tamizh)\b|[அஆஇஈஉஊஎஏஐஒஓஔகஙசஜஞடணதநபமயரலவழளறன]', t_clean):
-        return "ta"
-    # 4. Telugu
-    elif re.search(r'\b(?:telugu|telgu)\b|[అఆఇఈఉఊఋఎఏఐఒఓఔకఖగఘఙచఛజఝఞటఠడఢణతథదధనపఫబభమయరలవశషసహ]', t_clean):
-        return "te"
-    # 5. Malayalam
-    elif re.search(r'\b(?:malayalam|kerala)\b|[അആഇഈഉഊഋഎഏഐഒഓഔകഖഗഘങചഛജഝഞടഠഡഢണതഥദധനപഫബഭമയരലവശഷസഹളഴറ]', t_clean):
-        return "ml"
-    # 6. Marathi
-    elif re.search(r'\bmarathi\b', t_clean):
-        return "mr"
-    # 7. Gujarati
-    elif re.search(r'\b(?:gujarati|gujrati)\b|[અઆઇઈઉઊઋએઐઓઔકખગઘઙચછજઝઞટઠડઢણતથદધનપફબભમયરલવશષસહળ]', t_clean):
-        return "gu"
-    # 8. Bengali
-    elif re.search(r'\b(?:bengali|bangla)\b|[অআইঈউঊঋএঐওঔকখগঘঙচছজঝঞটঠডঢণতথদধনপফবভময়رلশষসহள]', t_clean):
-        return "bn"
-    # 9. Odia
-    elif re.search(r'\b(?:odia|oriya)\b|[ଅଆଇଈଉଊଋଏଐଓୌକଖଗଘଙଚଛଜଝଞଟଠଡଢଣତଥଦଧନପଫବଭମଯରଲଵଶଷସହଳ]', t_clean):
-        return "or"
-    # 10. English (Default)
-    return "en"
 
 
 def extract_birth_details(text: str) -> Optional[Dict[str, str]]:
@@ -630,9 +630,9 @@ def extract_birth_details(text: str) -> Optional[Dict[str, str]]:
         remainder = re.sub(r'\b(?:in|language|lang)\s+(?:kannada|hindi|tamil|telugu|malayalam|marathi|gujarati|bengali|odia|english)\b', '', remainder, flags=re.IGNORECASE)
         remainder = re.sub(r'\b(?:kannada|hindi|tamil|telugu|malayalam|marathi|gujarati|bengali|odia|english)\b', '', remainder, flags=re.IGNORECASE)
         
-        # Remove field label keywords and prompt verbs (including typos like ganerate/generate/create) from remainder
+        # Remove field label keywords and prompt verbs (including typos like genetate/ganerate/generate/create) from remainder
         remainder = re.sub(
-            r'\b(?:i|want|need|please|pls|can|you|generate|ganerate|generat|genrate|create|make|show|get|calculate|tell|send|me|my|for|in|at|city|place|location|date|time|dob|tob|pob|details|report|reports|chart|pdf|kundali|kundli|janmarashi|janma|janam|janmma|rashi|rashee|raasi| के|लिए|की|में|ನನ್ನ|ಜನ್ಮ|ರಾಶಿ|ಲೆಕ್ಕಾಚಾರ|ಮಾಡಿ)\b',
+            r'\b(?:i|want|need|please|pls|can|you|generate|ganerate|genetate|generat|genrate|create|make|show|get|calculate|tell|send|me|my|for|in|at|city|place|location|date|time|dob|tob|pob|details|report|reports|chart|pdf|kundali|kundli|janmarashi|janma|janam|janmma|rashi|rashee|raasi| के|लिए|की|में|ನನ್ನ|ಜನ್ಮ|ರಾಶಿ|ಲೆಕ್ಕಾಚಾರ|ಮಾಡಿ)\b',
             ' ', remainder, flags=re.IGNORECASE
         )
 
@@ -641,10 +641,10 @@ def extract_birth_details(text: str) -> Optional[Dict[str, str]]:
         for part in parts:
             # Remove any trailing/leading keywords, language names, or intro verbs
             cleaned_part = re.sub(
-                r'^(?:i|want|generate|get|calculate|tell|me|my|report|reports|chart|pdf|kundali|kundli|janmarashi|janma|janam|janmma|rashi|rashee|raasi|for|in|city|place|at|location|language|lang|kannada|hindi|tamil|telugu|bengali|marathi|malayalam|english|punjabi|gujarati|के|लिए|की|में|ನನ್ನ|ಜನ್ಮ|ರಾಶಿ|ಲೆಕ್ಕಾಚಾರ|ಮಾಡಿ|\s|[:=-])+',
+                r'^(?:i|want|generate|ganerate|genetate|generat|genrate|create|make|show|get|calculate|tell|me|my|report|reports|chart|pdf|kundali|kundli|janmarashi|janma|janam|janmma|rashi|rashee|raasi|for|in|city|place|at|location|language|lang|kannada|hindi|tamil|telugu|bengali|marathi|malayalam|english|punjabi|gujarati|के|लिए|की|में|ನನ್ನ|ಜನ್ಮ|ರಾಶಿ|ಲೆಕ್ಕಾಚಾರ|ಮಾಡಿ|\s|[:=-])+',
                 '', part, flags=re.IGNORECASE
             ).strip(' :=-')
-            cleaned_part = re.sub(r'\b(?:report|reports|chart|pdf|details|kundali|kundli|janmarashi)\b', '', cleaned_part, flags=re.IGNORECASE).strip(' :=-')
+            cleaned_part = re.sub(r'\b(?:report|reports|chart|pdf|details|kundali|kundli|janmarashi|generate|ganerate|genetate|generat|genrate|create)\b', '', cleaned_part, flags=re.IGNORECASE).strip(' :=-')
             if cleaned_part and not re.match(r'^\d+$', cleaned_part) and not any(k in cleaned_part.lower() for k in ["janmarashi", "janma rashi", "janmma rashi", "kundali"]):
                 norm_p = normalize_city_name(cleaned_part)
                 if norm_p:
@@ -660,6 +660,8 @@ def extract_birth_details(text: str) -> Optional[Dict[str, str]]:
         }
         safe_print(f"[EXTRACT] ✅ Found: {result}")
         return result
+
+    return None
 
 def format_time_for_api(time_str: str) -> str:
     """Ensure time format is 'HH:MM AM/PM' required by external Kundali API."""
@@ -1425,64 +1427,108 @@ def invoke_agent(request: QueryRequest, http_request: Request):
         safe_print("💳 KUNDALI FLOW - ASK FOR CONFIRMATION")
         safe_print(f"{'='*70}")
 
-        birth_details = extract_birth_details_from_history(current_messages)
-        
-        if birth_details:
-            pending_payment_requests[conversation_hash] = {
-                "birth_details": birth_details,
-                "product_type": "kundali",
-                "created_at": datetime.now().isoformat()
-            }
-            
-            safe_print(f"✅ Stored pending kundali request: {conversation_hash}")
-            safe_print(f"📝 Birth Details: {birth_details}")
+        # Check if user query references an existing completed payment ID
+        existing_pay_id = None
+        existing_record = None
+        pid_match = re.search(r'(pay_[A-Za-z0-9]+|order_[A-Za-z0-9]+)', original_user_query)
+        if pid_match:
+            candidate_id = pid_match.group(1)
+            for oid, pdata in completed_payments.items():
+                if pdata.get("product_type") == "kundali":
+                    if candidate_id in [oid, pdata.get("payment_id")]:
+                        existing_pay_id = candidate_id
+                        existing_record = pdata
+                        break
 
-            lang_display = LANG_DISPLAY_NAMES.get(birth_details.get('lang', 'en').lower(), 'English')
+        if existing_pay_id and existing_record:
+            safe_print(f"✅ Found existing verified Kundali payment for query: {existing_pay_id}")
+            d_url = existing_record.get("data", {}).get("download_url")
+            if not d_url:
+                b_url = get_base_url(http_request)
+                p_data = existing_record.get("data", {})
+                dt = quote(p_data.get("date", ""))
+                tm = quote(p_data.get("time", ""))
+                pl = quote(p_data.get("place", ""))
+                lg = quote(p_data.get("lang", "en"))
+                d_url = f"{b_url}/kundali/download?date={dt}&time={tm}&place={pl}&payment_id={existing_pay_id}&lang={lg}"
+            
             content_lines = [
-                "🎯 KUNDALI GENERATION (BIRTH CHART)",
+                "✅ **Payment Verified!**",
                 "",
-                "✅ Birth details found:",
-                f"  📅 Date: {birth_details['date']}",
-                f"  🕐 Time: {birth_details['time']}",
-                f"  📍 Place: {birth_details['place']}",
-                f"  🌐 Selected Language: {lang_display}",
+                "Your Kundali (birth chart) PDF is ready for download.",
                 "",
-                "💰 Cost: ₹199 (One-time payment)",
+                f"🔗 **Download Link:** [Download Kundali PDF]({d_url})",
                 "",
-                "You will receive:",
-                "  📄 Detailed birth chart PDF",
-                "  🔍 Complete astrological analysis",
-                "  💎 Personalized insights",
-                "",
-                "Do you want to proceed with payment?",
-                "(Reply: yes or no)"
+                f"Direct URL: {d_url}"
             ]
-            
             complete_chat[-1]["content"] = "\n".join(content_lines)
-            parsed_data = {
-                "status": "awaiting_payment_confirmation",
-                "birth_details": birth_details,
-                "conversation_hash": conversation_hash,
-                "product_type": "kundali",
-                "amount": f"₹{KUNDALI_PRICE}"
-            }
-
+            links["download_url"] = d_url
+        elif pid_match and any(w in original_user_query.lower() for w in ['paid', 'download', 'payment id', 'pay_', 'order_']):
+            candidate_id = pid_match.group(1)
+            content_lines = [
+                f"⚠️ Payment ID `{candidate_id}` was not found in completed payments.",
+                "",
+                "If you recently completed payment, please ensure the payment verification step was completed."
+            ]
+            complete_chat[-1]["content"] = "\n".join(content_lines)
         else:
-            content_lines = [
-                "I’m happy to generate your Kundali (birth chart) for you! 📊",
-                "",
-                "To create your detailed Kundali report, please provide your birth details:",
-                "1. Date of birth (e.g., 2004-04-09 or 09-04-2004)",
-                "2. Time of birth (e.g., 01:00 AM or 6am)",
-                "3. Place of birth (e.g., Bengaluru, Delhi, Mumbai)",
-                "4. Preferred language (e.g., English, Kannada, Hindi, Tamil, Telugu, Malayalam, Marathi, Gujarati, Bengali, Odia)",
-                "",
-                "Example:",
-                "2004-04-09, 01:00 AM, Bengaluru, English",
-                "",
-                "Once you provide these details, I will set up your Kundali PDF report (₹199)."
-            ]
-            complete_chat[-1]["content"] = "\n".join(content_lines)
+            birth_details = extract_birth_details_from_history(current_messages)
+            if birth_details:
+                pending_payment_requests[conversation_hash] = {
+                    "birth_details": birth_details,
+                    "product_type": "kundali",
+                    "created_at": datetime.now().isoformat()
+                }
+                
+                safe_print(f"✅ Stored pending kundali request: {conversation_hash}")
+                safe_print(f"📝 Birth Details: {birth_details}")
+
+                lang_display = LANG_DISPLAY_NAMES.get(birth_details.get('lang', 'en').lower(), 'English')
+                content_lines = [
+                    "🎯 KUNDALI GENERATION (BIRTH CHART)",
+                    "",
+                    "✅ Birth details found:",
+                    f"  📅 Date: {birth_details['date']}",
+                    f"  🕐 Time: {birth_details['time']}",
+                    f"  📍 Place: {birth_details['place']}",
+                    f"  🌐 Selected Language: {lang_display}",
+                    "",
+                    "💰 Cost: ₹199 (One-time payment)",
+                    "",
+                    "You will receive:",
+                    "  📄 Detailed birth chart PDF",
+                    "  🔍 Complete astrological analysis",
+                    "  💎 Personalized insights",
+                    "",
+                    "Do you want to proceed with payment?",
+                    "(Reply: yes or no)"
+                ]
+                
+                complete_chat[-1]["content"] = "\n".join(content_lines)
+                parsed_data = {
+                    "status": "awaiting_payment_confirmation",
+                    "birth_details": birth_details,
+                    "conversation_hash": conversation_hash,
+                    "product_type": "kundali",
+                    "amount": f"₹{KUNDALI_PRICE}"
+                }
+
+            else:
+                content_lines = [
+                    "I’m happy to generate your Kundali (birth chart) for you! 📊",
+                    "",
+                    "To create your detailed Kundali report, please provide your birth details:",
+                    "1. Date of birth (e.g., 2004-04-09 or 09-04-2004)",
+                    "2. Time of birth (e.g., 01:00 AM or 6am)",
+                    "3. Place of birth (e.g., Bengaluru, Delhi, Mumbai)",
+                    "4. Preferred language (e.g., English, Kannada, Hindi, Tamil, Telugu, Malayalam, Marathi, Gujarati, Bengali, Odia)",
+                    "",
+                    "Example:",
+                    "2004-04-09, 01:00 AM, Bengaluru, English",
+                    "",
+                    "Once you provide these details, I will set up your Kundali PDF report (₹199)."
+                ]
+                complete_chat[-1]["content"] = "\n".join(content_lines)
 
     elif tool_type and tool_type.startswith("predictive"):
         safe_print(f"\n{'='*70}")
@@ -1859,11 +1905,11 @@ def download_kundali(
 ):
     """Download Kundali PDF - Requires Verified Payment"""
     
-    print(f"\n{'='*70}")
-    print("📥 KUNDALI PDF DOWNLOAD INITIATED")
-    print(f"{'='*70}")
-    print(f"Date: {date}, Time: {time}, Place: {place}")
-    print(f"Payment ID: {payment_id}")
+    safe_print(f"\n{'='*70}")
+    safe_print("📥 KUNDALI PDF DOWNLOAD INITIATED")
+    safe_print(f"{'='*70}")
+    safe_print(f"Date: {date}, Time: {time}, Place: {place}")
+    safe_print(f"Payment ID: {payment_id}")
     
     # 🔒 VERIFY THAT PAYMENT WAS COMPLETED
     payment_verified = False
@@ -1874,7 +1920,7 @@ def download_kundali(
                 break
 
     if not payment_verified:
-        print(f"❌ DOWNLOAD DENIED: Payment ID {payment_id} is not verified!")
+        safe_print(f"❌ DOWNLOAD DENIED: Payment ID {payment_id} is not verified!")
         return Response(
             content=json.dumps({"error": "Payment verification required", "message": "Please complete Razorpay payment to download your Kundali PDF."}),
             status_code=403,
@@ -1886,7 +1932,7 @@ def download_kundali(
         time = unquote(time)
         place = unquote(place)
         
-        print(f"Decoded - Date: {date}, Time: {time}, Place: {place}")
+        safe_print(f"Decoded - Date: {date}, Time: {time}, Place: {place}")
         
         formatted_time = format_time_for_api(time)
         pdf_payload = {"date": date, "time": formatted_time, "place": place, "lang": (lang or "en").lower()}
@@ -1899,7 +1945,7 @@ def download_kundali(
                 verify=False
             )
             
-            print(f"PDF API Response Status: {pdf_response.status_code}")
+            safe_print(f"PDF API Response Status: {pdf_response.status_code}")
             
             if pdf_response.status_code != 200:
                 return {"error": f"PDF generation failed (Status: {pdf_response.status_code})"}
@@ -1909,8 +1955,8 @@ def download_kundali(
             
             filename = f"kundali-{date}-{payment_id}.pdf"
             
-            print(f"✅ Sending PDF: {filename}")
-            print(f"   Size: {pdf_size} bytes")
+            safe_print(f"✅ Sending PDF: {filename}")
+            safe_print(f"   Size: {pdf_size} bytes")
             
             return Response(
                 content=pdf_content,
@@ -1922,11 +1968,11 @@ def download_kundali(
             )
             
         except Exception as api_error:
-            print(f"❌ PDF API error: {str(api_error)}")
+            safe_print(f"❌ PDF API error: {str(api_error)}")
             return {"error": f"PDF generation failed: {str(api_error)}"}
             
     except Exception as e:
-        print(f"❌ Download error: {type(e).__name__}: {str(e)}")
+        safe_print(f"❌ Download error: {type(e).__name__}: {str(e)}")
         return {"error": f"Download failed: {str(e)}"}
 
 

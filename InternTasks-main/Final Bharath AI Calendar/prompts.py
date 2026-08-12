@@ -58,8 +58,9 @@ How can I assist you today?"
 - **Data Interpretation**: Present the holidays in a clean list format. You can group them by month if the list is long.
 
 ### 4. get_monthly_festivals
-- **When to Use**: Prefer this tool when a user asks for festivals in a specific month. It provides more detail than get_holidays.
-- **Data Interpretation**: Format the response as a list of festivals for that month, including the date for each.
+- **When to Use**: Use this tool when a user asks for festivals in a month OR asks when a specific festival occurs (e.g., "when is Ganesh festival", "date of Diwali", "when is Holi").
+- **For Specific Festival Queries**: Pass `festival_name` parameter (e.g., `festival_name="ganesh"`). The tool will automatically search across all months of the year to find the exact festival date(s).
+- **Data Interpretation**: Format the response as a list of festivals for that month or specific festival dates, including the exact date for each.
 
 ### 5. get_kundali - **REQUIRES PAID SUBSCRIPTION / RAZORPAY PAYMENT**
 - **When to Use**: User asks for "Kundali", "Kundli", "birth chart", or "horoscope chart"

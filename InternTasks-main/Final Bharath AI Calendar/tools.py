@@ -148,40 +148,71 @@ def get_holidays(year: int = None, data_language: str = "EN") -> str:
 
 
 @tool
-def get_monthly_festivals(year: Optional[int] = None, month: Optional[str] = None, data_language: str = "EN") -> str:
+def get_monthly_festivals(year: Optional[int] = None, month: Optional[str] = None, festival_name: Optional[str] = None, data_language: str = "EN") -> str:
     """
-    Fetches festival data for a specific month and year from the ExaWeb API.
+    Fetches festival data for a specific month/year or searches for a specific festival across all months.
     
     Args:
-        year: The year to fetch (e.g., 2025). Defaults to current year.
-        month: The full month name to fetch (e.g., "june"). Defaults to current month.
+        year: The year to fetch (e.g., 2026). Defaults to current year.
+        month: The full month name (e.g., "september"). Optional.
+        festival_name: Specific festival name to search for across the year (e.g. "ganesh", "diwali", "holi"). Optional.
         data_language: The language for the festival names (default "EN").
     """
-    
     if not year:
         year = datetime.datetime.now().year
     
-    if not month:
-        month = datetime.datetime.now().strftime("%B").lower()
-    else:
-        month = month.lower()
-    
     api_url = "https://api.exaweb.in:3004/api/panchang/festival"
-    params = {"year": year, "month": month, "data_language": data_language, "app_language":'EN'}
     headers = {"api_key": "anvl_bharat_cal123"}
+    
+    # 🔍 If festival_name is provided OR if month is not specified, search across all 12 months for matching festival dates!
+    if festival_name or not month:
+        months_to_check = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]
+        found_festivals = []
+        target_kw = festival_name.lower().strip() if festival_name else ""
+
+        for m in months_to_check:
+            try:
+                params = {"year": year, "month": m, "data_language": data_language, "app_language": "EN"}
+                res = requests.get(api_url, params=params, headers=headers, timeout=5)
+                if res.status_code == 200:
+                    data = res.json()
+                    if isinstance(data, list):
+                        for item in data:
+                            fest_list = item.get("festivals", [])
+                            fest_str = " ".join(fest_list).lower()
+                            if target_kw:
+                                if target_kw in fest_str or any(k in fest_str for k in target_kw.split() if len(k) > 2):
+                                    found_festivals.append(item)
+                            elif not month:
+                                found_festivals.append(item)
+            except Exception:
+                continue
+        
+        if found_festivals:
+            trimmed_list = []
+            for item in found_festivals[:40]:
+                if isinstance(item, dict):
+                    trimmed_item = {k: item[k] for k in ['name', 'title', 'date', 'day', 'festivals', 'description'] if k in item}
+                    trimmed_list.append(trimmed_item)
+                else:
+                    trimmed_list.append(item)
+            return json.dumps(trimmed_list)
+
+    # Standard single month fetch
+    m_name = month.lower() if month else datetime.datetime.now().strftime("%B").lower()
+    params = {"year": year, "month": m_name, "data_language": data_language, "app_language": "EN"}
     
     try:
         response = requests.get(api_url, params=params, headers=headers, timeout=10)
         response.raise_for_status()
         data = response.json()
         
-        # 🚀 OPTIMIZATION: Prune festival payload
         if isinstance(data, list):
             trimmed_list = []
             for item in data[:30]:
                 if isinstance(item, dict):
                     trimmed_item = {
-                        k: item[k] for k in ['name', 'title', 'date', 'day', 'description']
+                        k: item[k] for k in ['name', 'title', 'date', 'day', 'festivals', 'description']
                         if k in item
                     }
                     trimmed_list.append(trimmed_item)
