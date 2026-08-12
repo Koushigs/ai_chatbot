@@ -51,7 +51,7 @@ JANMARASHI_KEYWORDS = [
     # English & Common Misspellings / Typos
     "janmarashi", "janmarash", "janma rashi", "janma rash", "janmma rashi", "janmma rash", "janmmarashi", "janam rashi", "janamrashi", "janam rash", "janm rashi", "janmrashi", "janmrash",
     "janmarasi", "janma raasi", "janam raasi", "janmma raasi", "janmarashii", "janma rashii", "janmma",
-    "moon sign", "lunar sign", "birth moon", "birth rashi", "lunar rashi", "my rashi",
+    "moon sign", "lunar sign", "birth moon", "birth rashi", "lunar rashi", "my rashi", "mera rashi", "meri rashi", "rashi batao", "rashi bataye", "mera rashi batao", "meri rashi batao",
     
     # Hindi
     "जन्म राशि", "चंद्र राशि", "जैनम राशि", "जन्मराशी",
@@ -451,7 +451,7 @@ def detect_tool_type_multilingual(user_query: str, ai_response: str, messages: O
                     if any(kw in user_content for kw in KUNDALI_KEYWORDS):
                         safe_print("✅ KUNDALI CONFIRMED via history context + current birth details")
                         return "kundali"
-                    if any(kw in user_content for kw in JANMARASHI_KEYWORDS) or re.search(r'\bja?n+a?m+[a-z]*\s*(?:r[a-z]*sh[a-z]*|r[a-z]*s[a-z]*|sign|moon|patrika)?\b', user_content):
+                    if any(kw in user_content for kw in JANMARASHI_KEYWORDS) or re.search(r'\bja?n+a?m+[a-z]*\s*(?:r[a-z]*sh[a-z]*|r[a-z]*s[a-z]*|sign|moon|patrika)?\b', user_content) or "rashi" in user_content:
                         safe_print("✅ JANMARASHI CONFIRMED via history context + current birth details")
                         return "janmarashi"
                     if any(kw in user_content for kw in PREDICTIVE_KEYWORDS):
@@ -1714,6 +1714,8 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
                     print(f"   Longitude: {longitude}")
                     
                     completed_payments[order_id] = {
+                        "payment_id": payment_id,
+                        "order_id": order_id,
                         "product_type": "janmarashi",
                         "data": {
                             "rashi": rashi,
@@ -1800,6 +1802,8 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
                 download_url = f"{base_url}/kundali/download?date={quote(date)}&time={quote(time)}&place={quote(place)}&payment_id={payment_id}&lang={quote(lang)}"
                 
                 completed_payments[order_id] = {
+                    "payment_id": payment_id,
+                    "order_id": order_id,
                     "product_type": "kundali",
                     "data": {
                         "date": date,
@@ -1863,16 +1867,13 @@ def download_kundali(
     
     # 🔒 VERIFY THAT PAYMENT WAS COMPLETED
     payment_verified = False
-    if payment_id in completed_payments:
-        payment_verified = True
-    else:
-        for order_id, pay_data in completed_payments.items():
-            if pay_data.get("product_type") == "kundali":
-                if payment_id in [order_id, pay_data.get("payment_id")]:
-                    payment_verified = True
-                    break
+    for order_id, pay_data in completed_payments.items():
+        if pay_data.get("product_type") == "kundali":
+            if payment_id in [order_id, pay_data.get("payment_id")]:
+                payment_verified = True
+                break
 
-    if not payment_verified and not (payment_id and payment_id.startswith("pay_")):
+    if not payment_verified:
         print(f"❌ DOWNLOAD DENIED: Payment ID {payment_id} is not verified!")
         return Response(
             content=json.dumps({"error": "Payment verification required", "message": "Please complete Razorpay payment to download your Kundali PDF."}),
