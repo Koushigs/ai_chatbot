@@ -614,43 +614,51 @@ def extract_birth_details(text: str) -> Optional[Dict[str, str]]:
         time_str = f"{hr:02d}:00 {ampm}"
 
     if date_str and time_str:
-        # Remove matched date & time strings to isolate place text
-        remainder = text
-        if match_yyyy:
-            remainder = remainder.replace(match_yyyy.group(0), "")
-        elif match_dd:
-            remainder = remainder.replace(match_dd.group(0), "")
-
-        if match_time_colon:
-            remainder = remainder.replace(match_time_colon.group(0), "")
-        elif match_time_simple:
-            remainder = remainder.replace(match_time_simple.group(0), "")
-
-        # Remove language phrases from remainder to keep place string clean
-        remainder = re.sub(r'\b(?:in|language|lang)\s+(?:kannada|hindi|tamil|telugu|malayalam|marathi|gujarati|bengali|odia|english)\b', '', remainder, flags=re.IGNORECASE)
-        remainder = re.sub(r'\b(?:kannada|hindi|tamil|telugu|malayalam|marathi|gujarati|bengali|odia|english)\b', '', remainder, flags=re.IGNORECASE)
+        # Check for explicit place label (e.g., Place: Mumbai, City: Delhi, Location: Bengaluru)
+        explicit_place_match = re.search(r'\b(?:place|city|location|pob)\s*[:=-]\s*([^,\n\r?]+)', text, flags=re.IGNORECASE)
         
-        # Remove field label keywords and prompt verbs (including typos like genetate/ganerate/generate/create) from remainder
-        remainder = re.sub(
-            r'\b(?:i|want|need|please|pls|can|you|generate|ganerate|genetate|generat|genrate|create|make|show|get|calculate|tell|send|me|my|for|in|at|city|place|location|date|time|dob|tob|pob|details|report|reports|chart|pdf|kundali|kundli|janmarashi|janma|janam|janmma|rashi|rashee|raasi| के|लिए|की|में|ನನ್ನ|ಜನ್ಮ|ರಾಶಿ|ಲೆಕ್ಕಾಚಾರ|ಮಾಡಿ)\b',
-            ' ', remainder, flags=re.IGNORECASE
-        )
+        if explicit_place_match:
+            raw_place = explicit_place_match.group(1).strip()
+            cleaned_place = re.sub(r'^(?:in|at|city|place|location)\s+', '', raw_place, flags=re.IGNORECASE).strip(' :=-')
+            norm_p = normalize_city_name(cleaned_place)
+            place_text = norm_p if norm_p else (cleaned_place if cleaned_place else "Unknown")
+        else:
+            # Remove matched date & time strings to isolate place text
+            remainder = text
+            if match_yyyy:
+                remainder = remainder.replace(match_yyyy.group(0), "")
+            elif match_dd:
+                remainder = remainder.replace(match_dd.group(0), "")
 
-        parts = [p.strip() for p in remainder.split(",") if p.strip()]
-        valid_parts = []
-        for part in parts:
-            # Remove any trailing/leading keywords, language names, or intro verbs
-            cleaned_part = re.sub(
-                r'^(?:i|want|generate|ganerate|genetate|generat|genrate|create|make|show|get|calculate|tell|me|my|report|reports|chart|pdf|kundali|kundli|janmarashi|janma|janam|janmma|rashi|rashee|raasi|for|in|city|place|at|location|language|lang|kannada|hindi|tamil|telugu|bengali|marathi|malayalam|english|punjabi|gujarati|के|लिए|की|में|ನನ್ನ|ಜನ್ಮ|ರಾಶಿ|ಲೆಕ್ಕಾಚಾರ|ಮಾಡಿ|\s|[:=-])+',
-                '', part, flags=re.IGNORECASE
-            ).strip(' :=-')
-            cleaned_part = re.sub(r'\b(?:report|reports|chart|pdf|details|kundali|kundli|janmarashi|generate|ganerate|genetate|generat|genrate|create)\b', '', cleaned_part, flags=re.IGNORECASE).strip(' :=-')
-            if cleaned_part and not re.match(r'^\d+$', cleaned_part) and not any(k in cleaned_part.lower() for k in ["janmarashi", "janma rashi", "janmma rashi", "kundali"]):
-                norm_p = normalize_city_name(cleaned_part)
-                if norm_p:
-                    valid_parts.append(norm_p)
+            if match_time_colon:
+                remainder = remainder.replace(match_time_colon.group(0), "")
+            elif match_time_simple:
+                remainder = remainder.replace(match_time_simple.group(0), "")
 
-        place_text = ", ".join(valid_parts) if valid_parts else "Unknown"
+            # Remove language phrases from remainder to keep place string clean
+            remainder = re.sub(r'\b(?:in|language|lang)\s+(?:kannada|hindi|tamil|telugu|malayalam|marathi|gujarati|bengali|odia|english)\b', '', remainder, flags=re.IGNORECASE)
+            remainder = re.sub(r'\b(?:kannada|hindi|tamil|telugu|malayalam|marathi|gujarati|bengali|odia|english)\b', '', remainder, flags=re.IGNORECASE)
+            
+            # Remove field label keywords, question words, and prompt verbs from remainder
+            remainder = re.sub(
+                r'\b(?:what|is|my|moon|sign|lunar|zodiac|birth|i|want|need|please|pls|can|you|generate|ganerate|genetate|generat|genrate|create|make|show|get|calculate|tell|send|me|for|in|at|city|place|location|date|time|dob|tob|pob|details|report|reports|chart|pdf|kundali|kundli|janmarashi|janma|janam|janmma|rashi|rashee|raasi| के|लिए|की|में|ನನ್ನ|ಜನ್ಮ|ರಾಶಿ|ಲೆಕ್ಕಾಚಾರ|ಮಾಡಿ)\b',
+                ' ', remainder, flags=re.IGNORECASE
+            )
+
+            parts = [p.strip() for p in remainder.split(",") if p.strip()]
+            valid_parts = []
+            for part in parts:
+                cleaned_part = re.sub(
+                    r'^(?:(?:\b(?:what|is|my|moon|sign|lunar|zodiac|birth|i|want|need|please|pls|can|you|generate|ganerate|genetate|generat|genrate|create|make|show|get|calculate|tell|me|report|reports|chart|pdf|kundali|kundli|janmarashi|janma|janam|janmma|rashi|rashee|raasi|for|in|city|place|at|location|language|lang|kannada|hindi|tamil|telugu|bengali|marathi|malayalam|english|punjabi|gujarati|के|लिए|की|में|ನನ್ನ|ಜನ್ಮ|ರಾಶಿ|ಲೆಕ್ಕಾಚಾರ|ಮಾಡಿ)\b)|\s|[:=-]|\?)+',
+                    '', part, flags=re.IGNORECASE
+                ).strip(' :=-?')
+                cleaned_part = re.sub(r'\b(?:what|is|my|moon|sign|lunar|zodiac|birth|report|reports|chart|pdf|details|kundali|kundli|janmarashi|generate|ganerate|genetate|generat|genrate|create)\b', '', cleaned_part, flags=re.IGNORECASE).strip(' :=-?')
+                if cleaned_part and not re.match(r'^\d+$', cleaned_part) and not any(k in cleaned_part.lower() for k in ["janmarashi", "janma rashi", "janmma rashi", "kundali", "moon sign"]):
+                    norm_p = normalize_city_name(cleaned_part)
+                    if norm_p:
+                        valid_parts.append(norm_p)
+
+            place_text = ", ".join(valid_parts) if valid_parts else "Unknown"
 
         result = {
             "date": date_str,
@@ -856,11 +864,68 @@ KUNDALI_PRICE = 2 # ₹199
 JANMARASHI_PRICE = 2  # ₹20
 
 
+# 🔴 CRITICAL: PENDING REQUESTS & COMPLETED PAYMENTS PERSISTENT STORAGE (REDIS + LOCAL FALLBACK)
 # =============================================
-# 🔴 CRITICAL: PENDING REQUESTS STORAGE
-# =============================================
-pending_payment_requests: Dict[str, Dict[str, Any]] = {}
-completed_payments: Dict[str, Dict[str, Any]] = {}
+PAYMENTS_DB_FILE = os.path.join(os.path.dirname(__file__), "payments_db.json")
+KV_REST_API_URL = os.getenv("KV_REST_API_URL") or os.getenv("UPSTASH_REDIS_REST_URL")
+KV_REST_API_TOKEN = os.getenv("KV_REST_API_TOKEN") or os.getenv("UPSTASH_REDIS_REST_TOKEN")
+
+def load_payments_db():
+    # 1. Try Redis KV if environment variables are configured (e.g. Vercel KV / Upstash Redis)
+    if KV_REST_API_URL and KV_REST_API_TOKEN:
+        try:
+            resp = requests.get(
+                f"{KV_REST_API_URL.rstrip('/')}/get/completed_payments_db",
+                headers={"Authorization": f"Bearer {KV_REST_API_TOKEN}"},
+                timeout=5
+            )
+            if resp.status_code == 200:
+                res_json = resp.json()
+                raw_result = res_json.get("result")
+                if raw_result:
+                    data = json.loads(raw_result) if isinstance(raw_result, str) else raw_result
+                    safe_print("✅ Payments DB loaded from Redis (Vercel KV)")
+                    return data.get("completed_payments", {}), data.get("pending_payment_requests", {})
+        except Exception as redis_err:
+            safe_print(f"⚠️ Redis KV load warning: {redis_err}")
+
+    # 2. Fallback to local JSON file (Local Development)
+    if os.path.exists(PAYMENTS_DB_FILE):
+        try:
+            with open(PAYMENTS_DB_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data.get("completed_payments", {}), data.get("pending_payment_requests", {})
+        except Exception as e:
+            safe_print(f"⚠️ Error loading payments_db.json: {e}")
+    return {}, {}
+
+def save_payments_db():
+    db_payload = {
+        "completed_payments": completed_payments,
+        "pending_payment_requests": pending_payment_requests
+    }
+    # 1. Try Redis KV if environment variables are configured (e.g. Vercel KV / Upstash Redis)
+    if KV_REST_API_URL and KV_REST_API_TOKEN:
+        try:
+            requests.post(
+                f"{KV_REST_API_URL.rstrip('/')}/set/completed_payments_db",
+                headers={"Authorization": f"Bearer {KV_REST_API_TOKEN}"},
+                json=json.dumps(db_payload, ensure_ascii=False),
+                timeout=5
+            )
+            safe_print("✅ Payments DB saved to Redis (Vercel KV)")
+            return
+        except Exception as redis_err:
+            safe_print(f"⚠️ Redis KV save warning: {redis_err}")
+
+    # 2. Fallback to local JSON file (Local Development)
+    try:
+        with open(PAYMENTS_DB_FILE, "w", encoding="utf-8") as f:
+            json.dump(db_payload, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        safe_print(f"⚠️ Local payments save skipped: {e}")
+
+completed_payments, pending_payment_requests = load_payments_db()
 
 # Recommendation Eligibility Engine Instance
 eligibility_engine = RecommendationEligibilityEngine()
@@ -1004,50 +1069,8 @@ def create_razorpay_order(product_type: str, birth_details: Dict[str, str]) -> O
         return None
 
 
-def fallback_calculate_janmarashi(date_str: str, time_str: str, place_str: str) -> Dict:
-    """Fallback Janmarashi calculation if external API is unreachable or place is unknown"""
-    try:
-        dt = datetime.strptime(date_str, "%Y-%m-%d")
-        month, day = dt.month, dt.day
-        
-        rashis = [
-            ("Capricorn (मकर)", (1, 20), (2, 18)),
-            ("Aquarius (कुंभ)", (2, 19), (3, 20)),
-            ("Pisces (मीन)", (3, 21), (4, 19)),
-            ("Aries (मेष)", (4, 20), (5, 20)),
-            ("Taurus (वृषभ)", (5, 21), (6, 20)),
-            ("Gemini (मिथुन)", (6, 21), (7, 22)),
-            ("Cancer (कर्क)", (7, 23), (8, 22)),
-            ("Leo (सिंह)", (8, 23), (9, 22)),
-            ("Virgo (कन्या)", (9, 23), (10, 22)),
-            ("Libra (तुला)", (10, 23), (11, 21)),
-            ("Scorpio (वृश्चिक)", (11, 22), (12, 21)),
-            ("Sagittarius (धनु)", (12, 22), (1, 19))
-        ]
-        
-        rashi_name = "Vrishabha (Taurus)"
-        for name, start, end in rashis:
-            s_m, s_d = start
-            e_m, e_d = end
-            if (month == s_m and day >= s_d) or (month == e_m and day <= e_d):
-                rashi_name = name
-                break
-                
-        return {
-            "moonRashi": rashi_name,
-            "moonLongitude": "200.43°",
-            "location": {"place": place_str if (place_str and place_str != "Unknown") else "India"}
-        }
-    except Exception:
-        return {
-            "moonRashi": "Vrishabha (Taurus)",
-            "moonLongitude": "200.43°",
-            "location": {"place": place_str or "India"}
-        }
-
-
 def call_janmarashi_api(date: str, time: str, place: str, lang: str = "en") -> Optional[Dict]:
-    """Call Janmarashi API with intelligent fallback"""
+    """Call Janmarashi API"""
     try:
         safe_print(f"🔮 Calling Janmarashi API: {date}, {time}, {place}, lang={lang}")
         payload = {"date": date, "time": time, "place": place, "lang": lang.lower()}
@@ -1065,8 +1088,7 @@ def call_janmarashi_api(date: str, time: str, place: str, lang: str = "en") -> O
     except Exception as e:
         safe_print(f"❌ Janmarashi API error: {e}")
     
-    safe_print("⚠️ Falling back to built-in Janmarashi calculation...")
-    return fallback_calculate_janmarashi(date, time, place)
+    return None
 
 
 # =============================================
@@ -1675,21 +1697,75 @@ def invoke_agent(request: QueryRequest, http_request: Request):
 def get_payment_status(order_id: str = Query(...)):
     """Check payment status"""
     
-    print(f"\n📊 PAYMENT STATUS CHECK: {order_id}")
+    safe_print(f"\n📊 PAYMENT STATUS CHECK: {order_id}")
     
     if order_id in completed_payments:
         payment_data = completed_payments[order_id]
-        print(f"✅ PAYMENT FOUND IN STORAGE: {order_id}")
+        safe_print(f"✅ PAYMENT FOUND IN STORAGE: {order_id}")
+        
+        status = payment_data.get("status", "delivered")
+        
+        if status == "pending_delivery" and payment_data.get("product_type") == "janmarashi":
+            safe_print(f"🔄 Retrying real Janmarashi API for pending order: {order_id}")
+            stored_data = payment_data.get("data", {})
+            date = stored_data.get("date")
+            time_val = stored_data.get("time")
+            place = stored_data.get("place")
+            lang = stored_data.get("lang", "en")
+            
+            janmarashi_data = call_janmarashi_api(date, time_val, place, lang)
+            if janmarashi_data:
+                rashi = janmarashi_data["moonRashi"]
+                longitude = janmarashi_data.get("moonLongitude", "N/A")
+                location = janmarashi_data.get("location", {}) or {}
+                lat = location.get("latitude")
+                lon = location.get("longitude")
+                
+                safe_print(f"✅ Retry succeeded! Updating status to delivered for order {order_id}")
+                payment_data["status"] = "delivered"
+                payment_data["data"] = {
+                    "rashi": rashi,
+                    "moonLongitude": longitude,
+                    "latitude": lat,
+                    "longitude": lon,
+                    "date": date,
+                    "time": time_val,
+                    "place": place,
+                    "lang": lang
+                }
+                save_payments_db()
+                
+                return {
+                    "success": True,
+                    "payment_completed": True,
+                    "status": "delivered",
+                    "delivery": "delivered",
+                    "order_id": order_id,
+                    "product_type": payment_data.get("product_type"),
+                    "data": payment_data.get("data")
+                }
+            else:
+                safe_print(f"⏳ Retry failed for order {order_id}. Remaining pending_delivery.")
+                return {
+                    "success": True,
+                    "payment_completed": True,
+                    "status": "pending_delivery",
+                    "delivery": "pending",
+                    "order_id": order_id,
+                    "product_type": payment_data.get("product_type"),
+                    "message": "Payment received! Your Janma Rashi is being calculated — check back in a few minutes."
+                }
         
         return {
             "success": True,
             "payment_completed": True,
+            "status": status,
             "order_id": order_id,
             "product_type": payment_data.get("product_type"),
             "data": payment_data.get("data")
         }
     
-    print(f"⏳ PAYMENT NOT YET COMPLETED: {order_id}")
+    safe_print(f"⏳ PAYMENT NOT YET COMPLETED: {order_id}")
     
     return {
         "success": False,
@@ -1707,9 +1783,9 @@ def get_payment_status(order_id: str = Query(...)):
 def verify_payment(request: PaymentVerifyRequest, http_request: Request):
     """Verify Razorpay payment"""
     
-    print(f"\n{'='*70}")
-    print("💳 PAYMENT VERIFICATION STARTED")
-    print(f"{'='*70}")
+    safe_print(f"\n{'='*70}")
+    safe_print("💳 PAYMENT VERIFICATION STARTED")
+    safe_print(f"{'='*70}")
     
     order_id = request.order_id
     payment_id = request.razorpay_payment_id
@@ -1719,13 +1795,13 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
     place = request.place
     product_type = request.product_type or "kundali"
     
-    print(f"Order ID: {order_id}")
-    print(f"Payment ID: {payment_id}")
-    print(f"Product Type: {product_type}")
-    print(f"Birth Details: Date={date}, Time={time}, Place={place}")
+    safe_print(f"Order ID: {order_id}")
+    safe_print(f"Payment ID: {payment_id}")
+    safe_print(f"Product Type: {product_type}")
+    safe_print(f"Birth Details: Date={date}, Time={time}, Place={place}")
     
     try:
-        print(f"\n🔐 Verifying payment signature...")
+        safe_print(f"\n🔐 Verifying payment signature...")
         
         try:
             razorpay_client.utility.verify_payment_signature({
@@ -1733,9 +1809,9 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
                 'razorpay_payment_id': payment_id,
                 'razorpay_signature': signature
             })
-            print(f"✅ Signature verified successfully!")
+            safe_print(f"✅ Signature verified successfully!")
         except Exception as sig_error:
-            print(f"❌ SIGNATURE VERIFICATION FAILED!")
+            safe_print(f"❌ SIGNATURE VERIFICATION FAILED!")
             return {
                 "success": False,
                 "error_type": "signature_verification_failed",
@@ -1743,10 +1819,11 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
             }
         
         if product_type == "janmarashi":
-            print(f"\n📊 Preparing Janmarashi data...")
+            safe_print(f"\n📊 Preparing Janmarashi data...")
+            lang = getattr(request, 'lang', 'en') or 'en'
             
             try:
-                janmarashi_data = call_janmarashi_api(date, time, place, getattr(request, 'lang', 'en') or 'en')
+                janmarashi_data = call_janmarashi_api(date, time, place, lang)
                 
                 if janmarashi_data:
                     rashi = janmarashi_data["moonRashi"]
@@ -1755,14 +1832,15 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
                     lat = location.get("latitude")
                     lon = location.get("longitude")
                     
-                    print(f"✅ Janmarashi data retrieved!")
-                    print(f"   Rashi: {rashi}")
-                    print(f"   Longitude: {longitude}")
+                    safe_print(f"✅ Janmarashi data retrieved!")
+                    safe_print(f"   Rashi: {rashi}")
+                    safe_print(f"   Longitude: {longitude}")
                     
                     completed_payments[order_id] = {
                         "payment_id": payment_id,
                         "order_id": order_id,
                         "product_type": "janmarashi",
+                        "status": "delivered",
                         "data": {
                             "rashi": rashi,
                             "moonLongitude": longitude,
@@ -1770,9 +1848,11 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
                             "longitude": lon,
                             "date": date,
                             "time": time,
-                            "place": place
+                            "place": place,
+                            "lang": lang
                         }
                     }
+                    save_payments_db()
                     
                     return {
                         "success": True,
@@ -1780,6 +1860,7 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
                         "product_type": "janmarashi",
                         "payment_id": payment_id,
                         "order_id": order_id,
+                        "status": "delivered",
                         "data": {
                             "rashi": rashi,
                             "moonLongitude": longitude,
@@ -1791,18 +1872,52 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
                         }
                     }
                 else:
-                    print("❌ Janmarashi API call failed or returned empty data")
+                    safe_print("⏳ Janmarashi API call failed. Storing order as pending_delivery.")
+                    completed_payments[order_id] = {
+                        "payment_id": payment_id,
+                        "order_id": order_id,
+                        "product_type": "janmarashi",
+                        "status": "pending_delivery",
+                        "data": {
+                            "date": date,
+                            "time": time,
+                            "place": place,
+                            "lang": lang
+                        }
+                    }
+                    save_payments_db()
                     return {
-                        "success": False,
-                        "error_type": "api_error",
-                        "message": "Failed to fetch Janmarashi details from external service."
+                        "success": True,
+                        "delivery": "pending",
+                        "status": "pending_delivery",
+                        "message": "Payment received! Your Janma Rashi is being calculated — check back in a few minutes.",
+                        "product_type": "janmarashi",
+                        "payment_id": payment_id,
+                        "order_id": order_id
                     }
             except Exception as api_error:
-                print(f"❌ Janmarashi API error: {str(api_error)}")
+                safe_print(f"⚠️ Janmarashi API exception ({api_error}). Storing order as pending_delivery.")
+                completed_payments[order_id] = {
+                    "payment_id": payment_id,
+                    "order_id": order_id,
+                    "product_type": "janmarashi",
+                    "status": "pending_delivery",
+                    "data": {
+                        "date": date,
+                        "time": time,
+                        "place": place,
+                        "lang": lang
+                    }
+                }
+                save_payments_db()
                 return {
-                    "success": False,
-                    "error_type": "api_error",
-                    "message": f"Janmarashi generation error: {str(api_error)}"
+                    "success": True,
+                    "delivery": "pending",
+                    "status": "pending_delivery",
+                    "message": "Payment received! Your Janma Rashi is being calculated — check back in a few minutes.",
+                    "product_type": "janmarashi",
+                    "payment_id": payment_id,
+                    "order_id": order_id
                 }
         
         else:
@@ -1859,6 +1974,7 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
                         "download_url": download_url
                     }
                 }
+                save_payments_db()
                 
                 return {
                     "success": True,

@@ -646,11 +646,15 @@
             }
 
             const box = document.getElementById('chatMessages');
-            const statusDiv = document.createElement('div');
-            statusDiv.id = 'paymentStatus';
+            let statusDiv = document.getElementById('paymentStatus');
+            if (!statusDiv) {
+                statusDiv = document.createElement('div');
+                statusDiv.id = 'paymentStatus';
+                box.appendChild(statusDiv);
+            }
+            statusDiv.style.display = 'block';
             statusDiv.className = 'payment-status polling';
             statusDiv.innerHTML = '🕐 Waiting for payment confirmation...';
-            box.appendChild(statusDiv);
             box.scrollTop = box.scrollHeight;
 
             let pollCount = 0;
@@ -663,27 +667,33 @@
                     const result = await response.json();
 
                     if (result.success && result.payment_completed) {
-                        console.log('✅ PAYMENT COMPLETED FROM POLLING!', result);
-                        clearInterval(currentPollingInterval);
+                        if (result.status === 'pending_delivery' || result.delivery === 'pending') {
+                            console.log('⏳ Payment verified, Janma Rashi calculation pending...', result);
+                            statusDiv.className = 'payment-status polling';
+                            statusDiv.innerHTML = '🔮 Payment received! Your Janma Rashi is being calculated...';
+                        } else {
+                            console.log('✅ PAYMENT COMPLETED & DELIVERED FROM POLLING!', result);
+                            clearInterval(currentPollingInterval);
 
-                        statusDiv.className = 'payment-status success';
-                        statusDiv.innerHTML = '✅ Payment Verified Successfully!';
+                            statusDiv.className = 'payment-status success';
+                            statusDiv.innerHTML = '✅ Payment Verified Successfully!';
 
-                        if (productType === 'janmarashi' || result.product_type === 'janmarashi') {
-                            displayJanmarashiResults(result.data);
-                            if (result.recommendations) {
-                                displayProductRecommendations(result.recommendations);
+                            if (productType === 'janmarashi' || result.product_type === 'janmarashi') {
+                                displayJanmarashiResults(result.data);
+                                if (result.recommendations) {
+                                    displayProductRecommendations(result.recommendations);
+                                }
+                            } else if (productType === 'kundali' || result.product_type === 'kundali') {
+                                displayKundaliResults(result.data);
+                                if (result.recommendations) {
+                                    displayProductRecommendations(result.recommendations);
+                                }
                             }
-                        } else if (productType === 'kundali' || result.product_type === 'kundali') {
-                            displayKundaliResults(result.data);
-                            if (result.recommendations) {
-                                displayProductRecommendations(result.recommendations);
-                            }
+
+                            setTimeout(() => {
+                                box.scrollTop = box.scrollHeight;
+                            }, 100);
                         }
-
-                        setTimeout(() => {
-                            box.scrollTop = box.scrollHeight;
-                        }, 100);
                     }
 
                 } catch (error) {
@@ -698,9 +708,25 @@
 
         function handlePaymentCompletionFromStorage(paymentData) {
             console.log('🎉 Processing payment from storage:', paymentData);
+            // ✅ Clear paymentCompleted immediately so old data doesn't linger across refreshes
+            localStorage.removeItem('paymentCompleted');
 
             const productType = paymentData.product_type;
             const result = paymentData.result;
+            const orderId = paymentData.order_id;
+
+            if (result && (result.delivery === 'pending' || result.status === 'pending_delivery' || !result.data)) {
+                console.log('⏳ Payment verified but delivery is pending. Updating status display...');
+                let statusDiv = document.getElementById('paymentStatus');
+                if (statusDiv) {
+                    statusDiv.className = 'payment-status polling';
+                    statusDiv.innerHTML = '🔮 Payment received! Your Janma Rashi is being calculated...';
+                }
+                if (orderId && !currentPollingInterval) {
+                    startPaymentPolling(orderId, productType);
+                }
+                return;
+            }
 
             if (currentPollingInterval) {
                 console.log('⏹️  Stopping polling');
