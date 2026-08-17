@@ -20,8 +20,10 @@ from product_formatter import (
     extract_lucky_number_from_horoscope, extract_lucky_color_from_horoscope
 )
 import requests
-import urllib3
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+from config import (
+    KUNDALI_PRICE, JANMARASHI_PRICE, BHARAT_CA_BUNDLE,
+    KUNDALI_PDF_API, JANMARASHI_API
+)
 import re
 from urllib.parse import urlencode, quote
 import html
@@ -71,11 +73,17 @@ JANMARASHI_KEYWORDS = [
     # Marathi
     "जन्म राशी", "चंद्र राशी",
     
+    # Gujarati
+    "જન્મ રાશિ", "ચંદ્ર રાશિ", "જન્મરાશિ", "જન્મરાશી", "જન્મ રાશી",
+    
     # Bengali
     "জন্ম রাশি", "চন্দ্র রাশি",
     
     # Punjabi
     "ਜਨਮ ਰਾਸ਼ੀ", "ਚੰਦਰ ਰਾਸ਼ੀ",
+    
+    # Odia
+    "ଜନ୍ମ ରାଶି", "ଚନ୍ଦ୍ର ରାଶି", "ଜନ୍ମରାଶି",
 ]
 
 KUNDALI_KEYWORDS = [
@@ -86,8 +94,10 @@ KUNDALI_KEYWORDS = [
     "ಕುಂಡಲಿ", "ಜನ್ಮ ಪತ್ರಿಕೆ",
     "കുണ്ടലി", "ജന്മ പത്രിക",
     "कुंडली", "जन्म पत्रिका",
+    "કુંડળી", "જન્મ કુંડળી", "જનમ કુંડળી", "કુંડલી", "જન્મ પત્રિકા",
     "কুণ্ডলী", "জন्म পত्রিকা",
     "ਕੁੰਡਲੀ", "ਜਨਮ ਪੱਤਰੀ",
+    "କୁଣ୍ଡଲି", "ଜନ୍ମ କୁଣ୍ଡଲି", "ଜନ୍ମ ପତ୍ରିକା", "କୁଣ୍ଡଳୀ",
 ]
 
 # =============================================
@@ -112,7 +122,7 @@ PREDICTIVE_CATEGORIES = {
         # Marathi
         "लग्न", "विवाह", "आयुष्यमान",
         # Gujarati
-        "લગ્ન", "વિવાહ", "જીવનસાથી",
+        "લગ્ન", "વિવાહ", "જીવનસાથી", "શાદી",
         # Bengali
         "বিয়ে", "বিবাহ", "জীবনসঙ্গী",
         # Odia
@@ -135,11 +145,11 @@ PREDICTIVE_CATEGORIES = {
         # Marathi
         "नोकरी", "करिअर", "व्यवसाय", "बढती", "रोजगार",
         # Gujarati
-        "નોકરી", "કરિયર", "ધંધો", "પ્રમોશન", "રોજગાર",
+        "નોકરી", "કરિયર", "ધંધો", "પ્રમોશન", "રોજગાર", "કામ",
         # Bengali
         "চাকরি", "ক্যারিয়ার", "ব্যবসা", "উন্নতি", "কর্মজীবন",
         # Odia
-        "ଚାକିରି", "କ୍ୟାରିଅର୍", "ବ୍ୟବସାୟ", "ପ୍ରମୋସନ୍",
+        "ଚାକିରି", "କ୍ୟାରିଅର୍", "ବ୍ୟବସାୟ", "ପ୍ରମୋସନ୍", "କାର୍ଯ୍ୟ",
     ],
     "love": [
         # English & Hinglish
@@ -180,11 +190,11 @@ PREDICTIVE_CATEGORIES = {
         # Marathi
         "मुले", "बाळ", "संतान", "संतान सुख",
         # Gujarati
-        "બાળકો", "સંતાન", "સંતાન સુખ",
+        "બાળકો", "સંતાન", "સંતાન સુખ", "બાળક",
         # Bengali
         "সন্তান", "বাচ্চা", "সন্তান লাভ",
         # Odia
-        "ଛୁଆ", "ସନ୍ତାନ", "ସନ୍ତାନ ସୁଖ",
+        "ଛୁଆ", "ସନ୍ତାନ", "ସନ୍ତାନ ସୁଖ", "ପିଲା",
     ],
     "future": [
         # English & Hinglish
@@ -203,11 +213,11 @@ PREDICTIVE_CATEGORIES = {
         # Marathi
         "भविष्य", "भविष्यकाळ", "नशीब", "भाग्य",
         # Gujarati
-        "ભવિષ્ય", "ભાગ્ય", "નસીબ",
+        "ભવિષ્ય", "ભાગ્ય", "નસીબ", "ભવિષ્યફળ",
         # Bengali
         "ভবিষ্যৎ", "ভাগ্য", "ভবিষ্যৎ বাণী",
         # Odia
-        "ଭବિଷ୍ୟତ", "ଭାଗ୍ୟ", "ଭବିଷ୍ୟଫଳ",
+        "ଭବିଷ୍ୟତ", "ଭାଗ୍ୟ", "ଭବିଷ୍ୟଫଳ",
     ]
 }
 
@@ -264,6 +274,11 @@ HOROSCOPE_RASHI_KEYWORDS = [
     "तुला", "वृश्चिक", "धनु", "मकर", "कुंभ", "मीन",
     "राशीफल",
     
+    # Gujarati (zodiac signs)
+    "મેષ", "વૃષભ", "મિથુન", "કર્ક", "સિંહ", "કન્યા",
+    "તુલા", "વૃશ્ચિક", "ધનુ", "મકર", "કુંભ", "મીન",
+    "રાશિફળ", "રાશીફળ", "રાશિ", "રાશી",
+    
     # Bengali (zodiac signs)
     "মেষ", "বৃষ", "মিথুন", "কর্ক", "সিংহ", "কন্যা",
     "তুলা", "বৃশ্চিক", "ধনু", "মকর", "কুম্ভ", "মীন",
@@ -271,6 +286,11 @@ HOROSCOPE_RASHI_KEYWORDS = [
     # Punjabi (zodiac signs)
     "ਮੇਸ਼", "ਵ੍ਰਿਸ਼", "ਮਿਥੁਨ", "ਕਰਕ", "ਸਿੰਘ", "ਕੰਨਿਆ",
     "ਤੁਲਾ", "ਵ੍ਰਿਸ਼ਚਿਕ", "ਧਨੂ", "ਮਕਰ", "ਕੁੰਭ", "ਮੀਨ",
+    
+    # Odia (zodiac signs)
+    "ମେଷ", "ବୃଷ", "ମିଥୁନ", "କର୍କଟ", "ସିଂହ", "କନ୍ୟା",
+    "ତୁଳା", "ବିଛା", "ଧନୁ", "ମକର", "କୁମ୍ଭ", "ମୀନ",
+    "ରାଶିଫଳ", "ରାଶି",
 ]
 
 PANCHANG_KEYWORDS = [
@@ -281,6 +301,8 @@ PANCHANG_KEYWORDS = [
     "ಪಂಚಾಂಗ", "ತಿಥಿ", "ನಕ್ಷತ್ರ", "ಮುಹೂರ್ತ",
     "പഞ്ചാംഗം", "തിതി", "നക്ഷത്രം", "മുഹൂർത്തം",
     "पंचांग", "तिथी", "नक्षत्र", "मुहूर्त",
+    "પંચાંગ", "તિથિ", "નક્ષત્ર", "મુહૂર્ત",
+    "ପଞ୍ଚାଙ୍ଗ", "ତିଥି", "ନକ୍ଷତ୍ର", "ମୁହୂର୍ତ୍ତ",
     "পঞ্চাঙ্গ", "তিথি", "নক্ষত्র", "মুহূর্ত",
     "ਪੰਚਾਂਗ", "ਤਿਥੀ", "ਨਕਸ਼ਤ੍ਰ", "ਮੁਹੂਰਤ",
 ]
@@ -294,6 +316,8 @@ FESTIVAL_KEYWORDS = [
     "ಉತ್ಸವ", "ದೀಪಾವಳಿ", "ಹೋಳಿ",
     "ത്യോഹാരം", "ദീപാവലി", "ഹോളി",
     "सण", "दिवाली", "होळी",
+    "તહેવાર", "ઉત્સવ", "દિવાળી", "હોળી", "નવરાત્રી", "દશેરા", "ઉત્તરાયણ",
+    "ପର୍ବ", "ପର୍ବପର୍ବାଣି", "ଉତ୍ସବ", "ଦୀପାବଳି", "ହୋଲି", "ଦଶହରା", "ନବରାତ୍ରି", "ଦୁର୍ଗାପୂଜା",
     "উৎসব", "দিওয়ালি", "হোলি",
     "ਤਿਉਹਾਰ", "ਦਿਵਾਲੀ", "ਹੋਲੀ",
 ]
@@ -306,6 +330,8 @@ HOLIDAYS_KEYWORDS = [
     "ರಜೆ", "ವೇಳೆ",
     "ഇടവേള", "പ്രതിപാദന",
     "सुट्टी", "सार्वजनिक सुट्टी",
+    "રજા", "જાહેર રજા", "રજાઓ",
+    "ଛୁଟି", "ସରକାରୀ ଛୁଟି", "ଛୁଟିଦିନ",
     "ছুটি", "সরকারি ছুটি",
     "ਛੁੱਟੀ", "ਛੁੱਟੀ",
 ]
@@ -318,6 +344,8 @@ YES_KEYWORDS = [
     "ಹೌದು", "ಸರಿ", "ಸ್ವೀಕರಿಸಿ",
     "അതെ", "സാധുവായി",
     "हो", "ठीक आहे", "मंजूर आहे",
+    "હા", "હાજી", "બરાબર", "ચોક્કસ",
+    "હଁ", "ଠିକ୍ ଅଛି", "ନିଶ્ચିତ",
     "হ্যাঁ", "ঠিক আছে", "স্বীকৃতি",
     "ਹਾਂ", "ਠੀਕ ਹੈ", "ਪ੍ਰਵਾਨਗਤੀ",
 ]
@@ -330,7 +358,9 @@ NO_KEYWORDS = [
     "ಇಲ್ಲ", "ಮಾಡಬೇಡಿ", "ಬಿಡಿ",
     "ഇല്ല", "വേണ്ടാം",
     "नाही", "नकार", "सोडून दे",
-    "না", "নয়", "অস्वीकार",
+    "ના", "ના પાડો", "રદ કરો",
+    "ନା", "ମନା", "ବାତିଲ્",
+    "না", "নয়", "অસવીકાર",
     "ਨਹੀਂ", "ਮਤ ਕਰ", "ਅਸਵੀਕਾਰ",
 ]
 
@@ -443,6 +473,33 @@ def detect_tool_type_multilingual(user_query: str, ai_response: str, messages: O
     # Only evaluated when user_query has NO keywords for any tool!
     # ==========================================
     if messages:
+        # Language switch query fallback (e.g. "give me it in english", "give it me in english", "in english")
+        is_lang_switch = bool(
+            re.search(r'\b(?:give|tell|show|write|translate)\s+(?:me\s+)?(?:it\s+)?in\s+(?:english|inglesh|hindi|hindu|gujarati|gujrati|odia|kannada|tamil|telugu|malayalam|marathi|bengali)\b', normalized)
+            or re.search(r'^\s*(?:in|to)\s+(?:english|inglesh|hindi|gujarati|odia|kannada|tamil|telugu|malayalam|marathi|bengali)\b', normalized)
+            or any(phrase in normalized for phrase in ["give me it in english", "give it me in english", "give it in english", "in english", "english"])
+        )
+        if is_lang_switch:
+            for m in reversed(messages[:-1] if len(messages) > 1 else messages):
+                if isinstance(m, dict) and m.get("role") == "user":
+                    user_content = str(m.get("content", "")).lower()
+                    for kw in HOROSCOPE_RASHI_KEYWORDS:
+                        if kw in user_content:
+                            safe_print("✅ HOROSCOPE confirmed via language switch query + history context")
+                            return "horoscope"
+                    for kw in PANCHANG_KEYWORDS:
+                        if kw in user_content:
+                            safe_print("✅ PANCHANG confirmed via language switch query + history context")
+                            return "panchang"
+                    for kw in FESTIVAL_KEYWORDS:
+                        if kw in user_content:
+                            safe_print("✅ MONTHLY_FESTIVALS confirmed via language switch query + history context")
+                            return "monthly_festivals"
+                    for kw in HOLIDAYS_KEYWORDS:
+                        if kw in user_content:
+                            safe_print("✅ HOLIDAYS confirmed via language switch query + history context")
+                            return "holidays"
+
         current_birth_details = extract_birth_details(user_query)
         if current_birth_details:
             for m in reversed(messages):
@@ -467,7 +524,7 @@ def normalize_city_name(city: str) -> str:
         return city
     # Strip noise words like report, reports, chart, pdf, details, kundali, kundli, generate, genetate
     clean_city = re.sub(
-        r'\b(?:report|reports|chart|pdf|details|kundali|kundli|janmarashi|janma|janam|rashi|generate|ganerate|genetate|generat|genrate|create|make|show|get|calculate)\b',
+        r'(?:report|reports|chart|pdf|details|kundali|kundli|janmarashi|janma|janam|rashi|generate|ganerate|genetate|generat|genrate|create|make|show|get|calculate|મારી|જન્મ|કુંડળી|કુંડલી|બનાવો|મોર|ଜନ୍ମ|କୁଣ୍ଡଲି|ପ୍ରସ୍ତୁତ|କରନ୍ତୁ|मेरी|मेरा|जन्म|राशि|बताओ|बताएं|बताइए|बताइये|कुंडली|हिंदी|हिन्दी|ನನ್ನ|ಜನ್ಮ|ರಾಶಿ|ತಿಳಿಸಿ|ಕುಂಡಲಿ|ಲೆಕ್ಕಾಚಾರ|ಮಾಡಿ|ತೋರಿಸಿ|ಕನ್ನಡ)',
         '', city, flags=re.IGNORECASE
     ).strip(' :=-,')
     if not clean_city:
@@ -488,8 +545,12 @@ def extract_language(text: str) -> str:
     # Strip leading generic greetings like 'hi', 'hello', 'hey' to avoid false positive 'hi' (Hindi)
     t_clean = re.sub(r'^(?:hi|hello|hey|greetings|namaste)[,\s!.]+', '', t_clean)
 
+    # 0. English (Explicit check - case-insensitive)
+    if re.search(r'\b(?:english|inglesh)\b', t_clean):
+        return "en"
+
     # 1. Kannada
-    if re.search(r'\b(?:kannada|kanada|kannad)\b|[ನನ್ನಜನ್ಮಕುಂಡಲಿರಾಶಿಕ್ಅಆಇಈಉಊಋಎಏಐಒಓಔಕಖಗಘಙಚಛಜಝಞಟಠಡಢಣತಥದಧನಪಫಬಭಮಯರಲವಶಷసಹಳೞ]', t_clean):
+    if re.search(r'\b(?:kannada|kanada|kannad)\b|[ನನ್ನಜನ್ಮಕುಂಡಲಿರಾಶಿಕ್ಅಆಇಈಉಊಋಎಏಐಒಓಔಕಖಗಘಙಚಛಜಝಞಟಠಡಢಣತಥದಧನಪಫಬಭಮಯರಲವಶಷಸಹಳೞ]', t_clean):
         return "kn"
     # 2. Hindi
     elif re.search(r'\b(?:hindi|hindu)\b|[अआइईउऊऋएऐओऔकखगघङचछजझञटठडढणतथदधनपफबभमयरलवशषसह]', t_clean):
@@ -498,7 +559,7 @@ def extract_language(text: str) -> str:
     elif re.search(r'\b(?:tamil|tamizh)\b|[அஆஇஈஉஊஎஏஐஒஓஔகஙசஜஞடணதநபமயரலவழளறன]', t_clean):
         return "ta"
     # 4. Telugu
-    elif re.search(r'\b(?:telugu|telgu)\b|[అఆఇఈఉఊఋఎఏఐఒఓఔకఖగఘఙచఛజఝఞటఠడఢణతథదధనపఫబభమయరలవశಷసహ]', t_clean):
+    elif re.search(r'\b(?:telugu|telgu)\b|[అఆఇఈఉఊఋఎఏఐఒఓఔకఖగఘఙచఛజఝఞటఠడఢణతథదధನಪಫಬಭಮಯರಲವశಷసಹ]', t_clean):
         return "te"
     # 5. Malayalam
     elif re.search(r'\b(?:malayalam|kerala)\b|[അആഇഈഉഊഋഎഏഐഒഓഔകഖഗഘങചഛജഝഞടഠഡഢണതഥദധനപഫബഭമയരലവശഷസഹളഴറ]', t_clean):
@@ -507,7 +568,7 @@ def extract_language(text: str) -> str:
     elif re.search(r'\bmarathi\b', t_clean):
         return "mr"
     # 7. Gujarati
-    elif re.search(r'\b(?:gujarati|gujrati)\b|[અઆઇઈઉઊઋએઐઓઔકખగઘઙચછજઝઞટઠડઢણતથદધનપફબભમયરલવશષసહળ]', t_clean):
+    elif re.search(r'\b(?:gujarati|gujrati)\b|[અઆઇઈઉઊઋએઐઓઔકખగઘઙચછજઝઞટઠડઢણતથદધનપફબભમયરલવશષસહળ]', t_clean):
         return "gu"
     # 8. Bengali
     elif re.search(r'\b(?:bengali|bangla)\b|[অআইঈউঊঋএঐওঔকখগঘঙচছজঝঞটঠডঢণতথদধনপফবভময়رلশষসহள]', t_clean):
@@ -528,7 +589,7 @@ def is_yes_response(text: str) -> bool:
     # Check exact word matches first for short informal responses like 'ya', 'y', 'ha'
     words = re.findall(r'\b\w+\b', normalized)
     for word in words:
-        if word in ["yes", "y", "ya", "yaa", "yah", "yea", "yeah", "yep", "yup", "yess", "ok", "okay", "sure", "pay", "ha", "haan", "han"]:
+        if word in ["yes", "y", "ya", "yaa", "yah", "yea", "yeah", "yep", "yup", "yess", "ok", "okay", "sure", "pay", "ha", "haan", "han","yas"]:
             safe_print(f"✅ YES detected (word match): '{word}'")
             return True
 
@@ -637,11 +698,11 @@ def extract_birth_details(text: str) -> Optional[Dict[str, str]]:
 
             # Remove language phrases from remainder to keep place string clean
             remainder = re.sub(r'\b(?:in|language|lang)\s+(?:kannada|hindi|tamil|telugu|malayalam|marathi|gujarati|bengali|odia|english)\b', '', remainder, flags=re.IGNORECASE)
-            remainder = re.sub(r'\b(?:kannada|hindi|tamil|telugu|malayalam|marathi|gujarati|bengali|odia|english)\b', '', remainder, flags=re.IGNORECASE)
+            remainder = re.sub(r'\b(?:kannada|hindi|tamil|telugu|malayalam|marathi|gujarati|bengali|odia|english|ગુજરાતી|ઓડીઆ|ઓડિયા|ଓଡ଼ିଆ|हिन्दी|தமிழ்|తెలుగు|ಕನ್ನಡ|മലയാളം|मराठी|বাংলা|ਪੰਜਾਬੀ)\b', '', remainder, flags=re.IGNORECASE)
             
             # Remove field label keywords, question words, and prompt verbs from remainder
             remainder = re.sub(
-                r'\b(?:what|is|my|moon|sign|lunar|zodiac|birth|i|want|need|please|pls|can|you|generate|ganerate|genetate|generat|genrate|create|make|show|get|calculate|tell|send|me|for|in|at|city|place|location|date|time|dob|tob|pob|details|report|reports|chart|pdf|kundali|kundli|janmarashi|janma|janam|janmma|rashi|rashee|raasi| के|लिए|की|में|ನನ್ನ|ಜನ್ಮ|ರಾಶಿ|ಲೆಕ್ಕಾಚಾರ|ಮಾಡಿ)\b',
+                r'(?:\b(?:what|is|my|moon|sign|lunar|zodiac|birth|i|want|need|please|pls|can|you|generate|ganerate|genetate|generat|genrate|create|make|show|get|calculate|tell|send|me|for|in|at|city|place|location|date|time|dob|tob|pob|details|report|reports|chart|pdf|kundali|kundli|janmarashi|janma|janam|janmma|rashi|rashee|raasi| के|लिए|की|में|ನನ್ನ|ಜನ್ಮ|ರಾಶಿ|ಲೆಕ್ಕಾಚಾರ|ಮಾಡಿ|મારી|જન્મ|કુંડળી|કુંડલી|બનાવો|મોર|ଜନ୍ମ|କୁଣ୍ଡଲି|କୁଣ୍ଡଳୀ|ପ୍ରସ୍ତୁତ|କରନ୍ତୁ)\b|જન્મ|કુંડળી|કુંડલી|બનાવો|મારી|ଜନ୍ମ|କୁଣ୍ଡଲି|ପ୍ରସ୍ତୁତ|କରନ୍ତୁ|મોર)',
                 ' ', remainder, flags=re.IGNORECASE
             )
 
@@ -649,11 +710,122 @@ def extract_birth_details(text: str) -> Optional[Dict[str, str]]:
             valid_parts = []
             for part in parts:
                 cleaned_part = re.sub(
-                    r'^(?:(?:\b(?:what|is|my|moon|sign|lunar|zodiac|birth|i|want|need|please|pls|can|you|generate|ganerate|genetate|generat|genrate|create|make|show|get|calculate|tell|me|report|reports|chart|pdf|kundali|kundli|janmarashi|janma|janam|janmma|rashi|rashee|raasi|for|in|city|place|at|location|language|lang|kannada|hindi|tamil|telugu|bengali|marathi|malayalam|english|punjabi|gujarati|के|लिए|की|में|ನನ್ನ|ಜನ್ಮ|ರಾಶಿ|ಲೆಕ್ಕಾಚಾರ|ಮಾಡಿ)\b)|\s|[:=-]|\?)+',
+                    r'^(?:(?:\b(?:what|is|my|moon|sign|lunar|zodiac|birth|i|want|need|please|pls|can|you|generate|ganerate|genetate|generat|genrate|create|make|show|get|calculate|tell|me|report|reports|chart|pdf|kundali|kundli|janmarashi|janma|janam|janmma|rashi|rashee|raasi|for|in|city|place|at|location|language|lang|kannada|hindi|tamil|telugu|bengali|marathi|malayalam|english|punjabi|gujarati|के|लिए|की|में|ನನ್ನ|ಜನ್ಮ|ರಾಶಿ|ಲೆಕ್ಕಾಚಾರ|ಮಾಡಿ|મારી|જન્મ|કુંડળી|કુંડલી|બનાવો|મોર|ଜନ୍ମ|କୁଣ୍ଡଲି|ପ୍ରସ୍ତୁତ|କରନ୍ତୁ)\b)|\s|[:=-]|\?)+',
                     '', part, flags=re.IGNORECASE
                 ).strip(' :=-?')
-                cleaned_part = re.sub(r'\b(?:what|is|my|moon|sign|lunar|zodiac|birth|report|reports|chart|pdf|details|kundali|kundli|janmarashi|generate|ganerate|genetate|generat|genrate|create)\b', '', cleaned_part, flags=re.IGNORECASE).strip(' :=-?')
-                if cleaned_part and not re.match(r'^\d+$', cleaned_part) and not any(k in cleaned_part.lower() for k in ["janmarashi", "janma rashi", "janmma rashi", "kundali", "moon sign"]):
+                cleaned_part = re.sub(r'\b(?:what|is|my|moon|sign|lunar|zodiac|birth|report|reports|chart|pdf|details|kundali|kundli|janmarashi|generate|ganerate|genetate|generat|genrate|create|મારી|જન્મ|કુંડળી|કુંડલી|બનાવો|મોર|ଜନ୍ମ|କୁଣ୍ଡଲି|ପ୍ରସ୍ତୁତ|କରନ୍ତୁ)\b', '', cleaned_part, flags=re.IGNORECASE).strip(' :=-?')
+                
+                                # Check if cleaned_part is a valid city and not prompt noise
+                is_noise = any(kw in cleaned_part.lower() for kw in [
+                    "janmarashi",
+                    "janma rashi",
+                    "janmma rashi",
+                    "kundali",
+                    "kundli",
+                    "moon sign",
+                    "birth chart",
+                    "natal chart",
+                    "report",
+                    "reports",
+                    "chart",
+                    "pdf",
+                    "details",
+                    "generate",
+                    "create",
+                    "calculate",
+                    "tell",
+                    "show",
+                    "કુંડળી",
+                    "કુંડલી",
+                    "જન્મ",
+                    "મારી",
+                    "મારું",
+                    "મારુ",
+                    "બનાવો",
+                    "બતાવો",
+                    "રાશિ",
+                    "રાશી",
+                    "ગુજરાતી",
+                    "କୁଣ୍ଡଲି",
+                    "କୁଣ୍ଡଳୀ",
+                    "ଜନ୍ମ",
+                    "ମୋର",
+                    "ପ୍ରସ୍ତୁତ",
+                    "କରନ୍ତୁ",
+                    "ଦେଖାନ୍ତୁ",
+                    "କୁହନ୍ତୁ",
+                    "ରାଶି",
+                    "ଓଡ଼ିଆ",
+                    "मेरी",
+                    "मेरा",
+                    "मुझे",
+                    "जन्म",
+                    "राशि",
+                    "राशी",
+                    "बताओ",
+                    "बताएं",
+                    "बताइए",
+                    "बताइये",
+                    "कुंडली",
+                    "बनाओ",
+                    "बनाएं",
+                    "हिंदी",
+                    "हिन्दी",
+                    "ನನ್ನ",
+                    "ಜನ್ಮ",
+                    "ರಾಶಿ",
+                    "ತಿಳಿಸಿ",
+                    "ಕುಂಡಲಿ",
+                    "ಲೆಕ್ಕಾಚಾರ",
+                    "ಮಾಡಿ",
+                    "ತೋರಿಸಿ",
+                    "ಕನ್ನಡ",
+                    "என்",
+                    "எனது",
+                    "பிறப்பு",
+                    "இராசி",
+                    "ராசி",
+                    "குண்டலி",
+                    "காட்டு",
+                    "சொல்லு",
+                    "தமிழ்",
+                    "నా",
+                    "జన్మ",
+                    "రాశి",
+                    "కుండలి",
+                    "చూపించు",
+                    "చెప్పు",
+                    "తెలుగు",
+                    "എന്റെ",
+                    "ജനന",
+                    "ജന്മ",
+                    "രാശി",
+                    "കുണ്ടലി",
+                    "കാണിക്കുക",
+                    "പറയുക",
+                    "മലയാളം",
+                    "माझे",
+                    "माझा",
+                    "माझी",
+                    "जन्म",
+                    "राशी",
+                    "कुंडली",
+                    "सांगा",
+                    "दाखवा",
+                    "मराठी",
+                    "আমার",
+                    "জন্ম",
+                    "রাশি",
+                    "কুণ্ডলী",
+                    "বলুন",
+                    "দেখান",
+                    "বাংলা",
+                    "ਜਨਮ",
+                    "ਰਾਸ਼ੀ",
+                    "ਕੁੰਡਲੀ",
+                    "ਪੰਜਾਬੀ"
+                ])
+                if cleaned_part and not re.match(r'^\d+$', cleaned_part) and not is_noise:
                     norm_p = normalize_city_name(cleaned_part)
                     if norm_p:
                         valid_parts.append(norm_p)
@@ -842,11 +1014,6 @@ LANG_DISPLAY_NAMES = {
     "or": "Odia"
 }
 
-# =============================================
-# API ENDPOINTS & CONFIGURATION
-# =============================================
-KUNDALI_PDF_API = "https://www.kundali.bharatcalendars.in:8443/api/kundali/generate-pdf"
-JANMARASHI_API = "https://www.kundali.bharatcalendars.in:8443/api/janamrashi/moon-rashi"
 BASE_URL = "http://127.0.0.1:8000"
 
 
@@ -858,10 +1025,6 @@ def get_base_url(http_request: Optional[Request] = None) -> str:
         return f"{scheme}://{host}"
     return os.getenv("BASE_URL", "http://127.0.0.1:8000")
 
-
-# ✅ PRICING CONFIGURATION
-KUNDALI_PRICE = 2 # ₹199
-JANMARASHI_PRICE = 2  # ₹20
 
 
 # 🔴 CRITICAL: PENDING REQUESTS & COMPLETED PAYMENTS PERSISTENT STORAGE (REDIS + LOCAL FALLBACK)
@@ -1007,9 +1170,9 @@ def sanitize_predictive_response(text: str) -> str:
     cleaned_lines = []
     
     upsell_patterns = [
-        r"₹\s*199",
-        r"199\s*(inr|rupees|rs|\?)",
-        r"\b199\b",
+        rf"₹\s*{KUNDALI_PRICE}",
+        rf"{KUNDALI_PRICE}\s*(inr|rupees|rs|\?)",
+        rf"\b{KUNDALI_PRICE}\b",
         r"cost.*(kundali|report|service)",
         r"price.*(kundali|report|service)",
         r"detailed.*kundali.*report",
@@ -1074,7 +1237,8 @@ def call_janmarashi_api(date: str, time: str, place: str, lang: str = "en") -> O
     try:
         safe_print(f"🔮 Calling Janmarashi API: {date}, {time}, {place}, lang={lang}")
         payload = {"date": date, "time": time, "place": place, "lang": lang.lower()}
-        response = requests.post(JANMARASHI_API, json=payload, timeout=10, verify=False)
+        verify_param = BHARAT_CA_BUNDLE if BHARAT_CA_BUNDLE else True
+        response = requests.post(JANMARASHI_API, json=payload, timeout=10, verify=verify_param)
 
         if response.status_code == 200:
             data = response.json()
@@ -1312,9 +1476,25 @@ def invoke_agent(request: QueryRequest, http_request: Request):
     # ========================================
     
     if current_messages and current_messages[-1]["role"] == "user":
-        current_messages[-1]["content"] = (
-            f"{current_messages[-1]['content']} {get_current_date_context()}"
+        u_text = current_messages[-1]['content']
+        req_lang = extract_language(u_text)
+        lang_map = {
+            "en": "English", "hi": "Hindi", "gu": "Gujarati", "or": "Odia",
+            "kn": "Kannada", "ta": "Tamil", "te": "Telugu", "ml": "Malayalam",
+            "mr": "Marathi", "bn": "Bengali"
+        }
+        target_lang_name = lang_map.get(req_lang, "English")
+        
+        is_explicit_lang_req = bool(
+            re.search(r'\b(?:in|to|give|tell|translate|speak|show|write)\s+(?:english|inglesh|hindi|hindu|gujarati|gujrati|odia|oriay|kannada|kanada|tamil|telugu|malayalam|marathi|bengali)\b', u_text, flags=re.IGNORECASE)
+            or any(p in u_text.lower() for p in ["in english", "in hindi", "in gujarati", "in odia", "in kannada", "give me it in english", "give it me in english", "give it in english"])
         )
+        
+        if is_explicit_lang_req:
+            lang_directive = f" [IMPORTANT INSTRUCTION: The user explicitly requested the response in {target_lang_name}. You MUST output your complete response in {target_lang_name}. Translate any previous context or information into {target_lang_name}.]"
+            current_messages[-1]["content"] = f"{u_text}{lang_directive} {get_current_date_context()}"
+        else:
+            current_messages[-1]["content"] = f"{u_text} {get_current_date_context()}"
 
     inputs = {"messages": current_messages}
     final_ai_response = ""
@@ -1408,7 +1588,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
                 f"  📍 Place: {birth_details['place']}",
                 f"  🌐 Selected Language: {lang_display}",
                 "",
-                "💰 Cost: ₹20 (One-time payment)",
+                f"💰 Cost: ₹{JANMARASHI_PRICE} (One-time payment)",
                 "",
                 "You will receive:",
                 "  🌙 Your Janma Rashi (Moon Sign)",
@@ -1440,7 +1620,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
                 "Example:",
                 "2004-04-09, 01:00 AM, Bengaluru, English",
                 "",
-                "Once you provide these details, I will set up your Janma Rashi report (₹20)."
+                f"Once you provide these details, I will set up your Janma Rashi report (₹{JANMARASHI_PRICE})."
             ]
             complete_chat[-1]["content"] = "\n".join(content_lines)
 
@@ -1515,7 +1695,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
                     f"  📍 Place: {birth_details['place']}",
                     f"  🌐 Selected Language: {lang_display}",
                     "",
-                    "💰 Cost: ₹199 (One-time payment)",
+                    f"💰 Cost: ₹{KUNDALI_PRICE} (One-time payment)",
                     "",
                     "You will receive:",
                     "  📄 Detailed birth chart PDF",
@@ -1548,7 +1728,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
                     "Example:",
                     "2004-04-09, 01:00 AM, Bengaluru, English",
                     "",
-                    "Once you provide these details, I will set up your Kundali PDF report (₹199)."
+                    f"Once you provide these details, I will set up your Kundali PDF report (₹{KUNDALI_PRICE})."
                 ]
                 complete_chat[-1]["content"] = "\n".join(content_lines)
 
@@ -1560,11 +1740,11 @@ def invoke_agent(request: QueryRequest, http_request: Request):
         category = tool_type.replace("predictive_", "")
         
         offer_texts = {
-            "marriage": "For a detailed marriage-timing analysis based on your exact birth chart, I can prepare your personalized Kundali report (₹199). Share your birth date, time, and place.",
-            "career": "For a detailed career analysis based on your exact birth chart, I can prepare your personalized Kundali report (₹199). Share your birth date, time, and place.",
-            "love": "For a detailed relationship analysis based on your exact birth chart, I can prepare your personalized Kundali report (₹199). Share your birth date, time, and place.",
-            "children": "For a detailed children and family analysis based on your exact birth chart, I can prepare your personalized Kundali report (₹199). Share your birth date, time, and place.",
-            "future": "For a detailed personalized Kundali analysis based on your exact birth chart, I can prepare your personalized Kundali report (₹199). Share your birth date, time, and place."
+            "marriage": f"For a detailed marriage-timing analysis based on your exact birth chart, I can prepare your personalized Kundali report (₹{KUNDALI_PRICE}). Share your birth date, time, and place.",
+            "career": f"For a detailed career analysis based on your exact birth chart, I can prepare your personalized Kundali report (₹{KUNDALI_PRICE}). Share your birth date, time, and place.",
+            "love": f"For a detailed relationship analysis based on your exact birth chart, I can prepare your personalized Kundali report (₹{KUNDALI_PRICE}). Share your birth date, time, and place.",
+            "children": f"For a detailed children and family analysis based on your exact birth chart, I can prepare your personalized Kundali report (₹{KUNDALI_PRICE}). Share your birth date, time, and place.",
+            "future": f"For a detailed personalized Kundali analysis based on your exact birth chart, I can prepare your personalized Kundali report (₹{KUNDALI_PRICE}). Share your birth date, time, and place."
         }
         
         offer_text = offer_texts.get(category, offer_texts["future"])
@@ -1602,7 +1782,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
                     f"  📍 Place: {birth_details['place']}",
                     f"  🌐 Selected Language: {lang_display}",
                     "",
-                    "💰 Cost: ₹199 (One-time payment)",
+                    f"💰 Cost: ₹{KUNDALI_PRICE} (One-time payment)",
                     "",
                     "Do you want to proceed with payment?",
                     "(Reply: yes or no)"
@@ -1928,11 +2108,12 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
             pdf_payload = {"date": date, "time": formatted_time, "place": place, "lang": lang}
             
             try:
+                verify_param = BHARAT_CA_BUNDLE if BHARAT_CA_BUNDLE else True
                 pdf_response = requests.post(
                     KUNDALI_PDF_API,
                     json=pdf_payload,
                     timeout=30,
-                    verify=False
+                    verify=verify_param
                 )
                 
                 print(f"PDF API Response Status: {pdf_response.status_code}")
@@ -2054,11 +2235,12 @@ def download_kundali(
         pdf_payload = {"date": date, "time": formatted_time, "place": place, "lang": (lang or "en").lower()}
         
         try:
+            verify_param = BHARAT_CA_BUNDLE if BHARAT_CA_BUNDLE else True
             pdf_response = requests.post(
                 KUNDALI_PDF_API,
                 json=pdf_payload,
                 timeout=30,
-                verify=False
+                verify=verify_param
             )
             
             safe_print(f"PDF API Response Status: {pdf_response.status_code}")

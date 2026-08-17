@@ -8,8 +8,9 @@ import json
 import re
 import os
 import time
+from config import BHARAT_CA_BUNDLE, AFFILIATE_API_URL
 
-API_URL = "https://api.bharatcalendars.in:5200/affiliate/allItems"
+API_URL = AFFILIATE_API_URL
 CACHE_FILE = os.path.join(os.path.dirname(__file__), "affiliate_products_cache.json")
 CACHE_TTL = 3600  # 1 hour cache TTL
 
@@ -35,9 +36,10 @@ class AffiliateProductManager:
         # 1. Try fetching live from API
         try:
             import ssl
-            ssl_context = ssl.create_default_context()
-            ssl_context.check_hostname = False
-            ssl_context.verify_mode = ssl.CERT_NONE
+            if BHARAT_CA_BUNDLE:
+                ssl_context = ssl.create_default_context(cafile=BHARAT_CA_BUNDLE)
+            else:
+                ssl_context = ssl.create_default_context()
             
             req = urllib.request.Request(API_URL, headers={'User-Agent': 'Mozilla/5.0'})
             with urllib.request.urlopen(req, timeout=10, context=ssl_context) as resp:

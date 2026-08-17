@@ -6,3 +6,5 @@ __pycache__/
 .DS_Store
 payments_db.json
 test_janmarashi_pending.py
+test_config_prices.py
+test_chatfix9_multilingual.py
