@@ -35,6 +35,7 @@ from razorpay import Client
 # pyrefly: ignore [missing-import]
 from dotenv import load_dotenv
 import json
+import sqlite3
 from urllib.parse import unquote
 import time
 import unicodedata
@@ -1027,68 +1028,244 @@ def get_base_url(http_request: Optional[Request] = None) -> str:
 
 
 
-# 🔴 CRITICAL: PENDING REQUESTS & COMPLETED PAYMENTS PERSISTENT STORAGE (REDIS + LOCAL FALLBACK)
 # =============================================
-PAYMENTS_DB_FILE = os.path.join(os.path.dirname(__file__), "payments_db.json")
-KV_REST_API_URL = os.getenv("KV_REST_API_URL") or os.getenv("UPSTASH_REDIS_REST_URL")
-KV_REST_API_TOKEN = os.getenv("KV_REST_API_TOKEN") or os.getenv("UPSTASH_REDIS_REST_TOKEN")
+# SQLITE PERSISTENT STORAGE (CHATFIX-3)
+# =============================================
+DB_PATH = os.path.join(os.path.dirname(__file__), "payments.db")
 
-def load_payments_db():
-    # 1. Try Redis KV if environment variables are configured (e.g. Vercel KV / Upstash Redis)
-    if KV_REST_API_URL and KV_REST_API_TOKEN:
-        try:
-            resp = requests.get(
-                f"{KV_REST_API_URL.rstrip('/')}/get/completed_payments_db",
-                headers={"Authorization": f"Bearer {KV_REST_API_TOKEN}"},
-                timeout=5
+def get_db():
+    conn = sqlite3.connect(DB_PATH, timeout=15.0)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db():
+    with get_db() as conn:
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS pending_requests (
+                conversation_hash TEXT,
+                user_id TEXT,
+                product_type TEXT,
+                birth_details_json TEXT,
+                created_at TEXT
             )
-            if resp.status_code == 200:
-                res_json = resp.json()
-                raw_result = res_json.get("result")
-                if raw_result:
-                    data = json.loads(raw_result) if isinstance(raw_result, str) else raw_result
-                    safe_print("✅ Payments DB loaded from Redis (Vercel KV)")
-                    return data.get("completed_payments", {}), data.get("pending_payment_requests", {})
-        except Exception as redis_err:
-            safe_print(f"⚠️ Redis KV load warning: {redis_err}")
-
-    # 2. Fallback to local JSON file (Local Development)
-    if os.path.exists(PAYMENTS_DB_FILE):
-        try:
-            with open(PAYMENTS_DB_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                return data.get("completed_payments", {}), data.get("pending_payment_requests", {})
-        except Exception as e:
-            safe_print(f"⚠️ Error loading payments_db.json: {e}")
-    return {}, {}
-
-def save_payments_db():
-    db_payload = {
-        "completed_payments": completed_payments,
-        "pending_payment_requests": pending_payment_requests
-    }
-    # 1. Try Redis KV if environment variables are configured (e.g. Vercel KV / Upstash Redis)
-    if KV_REST_API_URL and KV_REST_API_TOKEN:
-        try:
-            requests.post(
-                f"{KV_REST_API_URL.rstrip('/')}/set/completed_payments_db",
-                headers={"Authorization": f"Bearer {KV_REST_API_TOKEN}"},
-                json=json.dumps(db_payload, ensure_ascii=False),
-                timeout=5
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS payments (
+                order_id TEXT PRIMARY KEY,
+                payment_id TEXT,
+                user_id TEXT,
+                product_type TEXT,
+                status TEXT,
+                data_json TEXT,
+                created_at TEXT
             )
-            safe_print("✅ Payments DB saved to Redis (Vercel KV)")
-            return
-        except Exception as redis_err:
-            safe_print(f"⚠️ Redis KV save warning: {redis_err}")
+        """)
+        conn.commit()
+    safe_print("✅ SQLite database payments.db initialized successfully!")
 
-    # 2. Fallback to local JSON file (Local Development)
-    try:
-        with open(PAYMENTS_DB_FILE, "w", encoding="utf-8") as f:
-            json.dump(db_payload, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        safe_print(f"⚠️ Local payments save skipped: {e}")
+init_db()
 
-completed_payments, pending_payment_requests = load_payments_db()
+def save_pending_request(conversation_hash: Optional[str], user_id: Optional[str], product_type: str, birth_details: dict, created_at: Optional[str] = None):
+    if not created_at:
+        created_at = datetime.now().isoformat()
+    birth_details_json = json.dumps(birth_details, ensure_ascii=False)
+    delete_pending_request(user_id=user_id, conversation_hash=conversation_hash)
+    with get_db() as conn:
+        conn.execute(
+            """
+            INSERT INTO pending_requests (conversation_hash, user_id, product_type, birth_details_json, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (conversation_hash, user_id, product_type, birth_details_json, created_at)
+        )
+        conn.commit()
+
+def get_pending_request(user_id: Optional[str] = None, conversation_hash: Optional[str] = None) -> Optional[dict]:
+    with get_db() as conn:
+        row = None
+        if user_id:
+            cursor = conn.execute(
+                "SELECT conversation_hash, user_id, product_type, birth_details_json, created_at FROM pending_requests WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+                (user_id,)
+            )
+            row = cursor.fetchone()
+        if not row and conversation_hash:
+            cursor = conn.execute(
+                "SELECT conversation_hash, user_id, product_type, birth_details_json, created_at FROM pending_requests WHERE conversation_hash = ? ORDER BY created_at DESC LIMIT 1",
+                (conversation_hash,)
+            )
+            row = cursor.fetchone()
+            
+        if row:
+            try:
+                b_details = json.loads(row["birth_details_json"]) if row["birth_details_json"] else {}
+            except Exception:
+                b_details = {}
+            return {
+                "conversation_hash": row["conversation_hash"],
+                "user_id": row["user_id"],
+                "product_type": row["product_type"],
+                "birth_details": b_details,
+                "created_at": row["created_at"]
+            }
+    return None
+
+def update_pending_request_birth_details(user_id: Optional[str], conversation_hash: Optional[str], birth_details: dict):
+    birth_details_json = json.dumps(birth_details, ensure_ascii=False)
+    with get_db() as conn:
+        if user_id:
+            conn.execute(
+                "UPDATE pending_requests SET birth_details_json = ? WHERE user_id = ?",
+                (birth_details_json, user_id)
+            )
+        if conversation_hash:
+            conn.execute(
+                "UPDATE pending_requests SET birth_details_json = ? WHERE conversation_hash = ?",
+                (birth_details_json, conversation_hash)
+            )
+        conn.commit()
+
+def delete_pending_request(user_id: Optional[str] = None, conversation_hash: Optional[str] = None):
+    with get_db() as conn:
+        if user_id and conversation_hash:
+            conn.execute(
+                "DELETE FROM pending_requests WHERE user_id = ? OR conversation_hash = ?",
+                (user_id, conversation_hash)
+            )
+        elif user_id:
+            conn.execute(
+                "DELETE FROM pending_requests WHERE user_id = ?",
+                (user_id,)
+            )
+        elif conversation_hash:
+            conn.execute(
+                "DELETE FROM pending_requests WHERE conversation_hash = ?",
+                (conversation_hash,)
+            )
+        conn.commit()
+
+def get_all_pending_requests() -> dict:
+    with get_db() as conn:
+        cursor = conn.execute("SELECT conversation_hash, user_id, product_type, birth_details_json, created_at FROM pending_requests")
+        rows = cursor.fetchall()
+        res = {}
+        for r in rows:
+            key = r["user_id"] if r["user_id"] else r["conversation_hash"]
+            if not key:
+                continue
+            try:
+                b_details = json.loads(r["birth_details_json"]) if r["birth_details_json"] else {}
+            except Exception:
+                b_details = {}
+            res[key] = {
+                "conversation_hash": r["conversation_hash"],
+                "user_id": r["user_id"],
+                "product_type": r["product_type"],
+                "birth_details": b_details,
+                "created_at": r["created_at"]
+            }
+        return res
+
+def save_payment(order_id: str, payment_id: str, user_id: Optional[str], product_type: str, status: str, data: dict, created_at: Optional[str] = None):
+    if not created_at:
+        created_at = datetime.now().isoformat()
+    data_json = json.dumps(data, ensure_ascii=False)
+    with get_db() as conn:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO payments (order_id, payment_id, user_id, product_type, status, data_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (order_id, payment_id, user_id, product_type, status, data_json, created_at)
+        )
+        conn.commit()
+
+def get_payment(order_id: str) -> Optional[dict]:
+    with get_db() as conn:
+        cursor = conn.execute(
+            "SELECT order_id, payment_id, user_id, product_type, status, data_json, created_at FROM payments WHERE order_id = ?",
+            (order_id,)
+        )
+        row = cursor.fetchone()
+        if row:
+            try:
+                p_data = json.loads(row["data_json"]) if row["data_json"] else {}
+            except Exception:
+                p_data = {}
+            return {
+                "order_id": row["order_id"],
+                "payment_id": row["payment_id"],
+                "user_id": row["user_id"],
+                "product_type": row["product_type"],
+                "status": row["status"],
+                "data": p_data,
+                "created_at": row["created_at"]
+            }
+    return None
+
+def get_payment_by_order_or_payment_id(identifier: str) -> Optional[dict]:
+    with get_db() as conn:
+        cursor = conn.execute(
+            "SELECT order_id, payment_id, user_id, product_type, status, data_json, created_at FROM payments WHERE order_id = ? OR payment_id = ?",
+            (identifier, identifier)
+        )
+        row = cursor.fetchone()
+        if row:
+            try:
+                p_data = json.loads(row["data_json"]) if row["data_json"] else {}
+            except Exception:
+                p_data = {}
+            return {
+                "order_id": row["order_id"],
+                "payment_id": row["payment_id"],
+                "user_id": row["user_id"],
+                "product_type": row["product_type"],
+                "status": row["status"],
+                "data": p_data,
+                "created_at": row["created_at"]
+            }
+    return None
+
+def update_payment_status(order_id: str, status: str, data: Optional[dict] = None):
+    with get_db() as conn:
+        if data is not None:
+            data_json = json.dumps(data, ensure_ascii=False)
+            conn.execute(
+                "UPDATE payments SET status = ?, data_json = ? WHERE order_id = ?",
+                (status, data_json, order_id)
+            )
+        else:
+            conn.execute(
+                "UPDATE payments SET status = ? WHERE order_id = ?",
+                (status, order_id)
+            )
+        conn.commit()
+
+def get_delivered_payments_by_user(user_id: str) -> list:
+    with get_db() as conn:
+        cursor = conn.execute(
+            "SELECT order_id, payment_id, user_id, product_type, status, data_json, created_at FROM payments WHERE user_id = ? AND status = 'delivered' ORDER BY created_at DESC",
+            (user_id,)
+        )
+        rows = cursor.fetchall()
+        result = []
+        for r in rows:
+            try:
+                p_data = json.loads(r["data_json"]) if r["data_json"] else {}
+            except Exception:
+                p_data = {}
+            result.append({
+                "order_id": r["order_id"],
+                "payment_id": r["payment_id"],
+                "user_id": r["user_id"],
+                "product_type": r["product_type"],
+                "status": r["status"],
+                "date_purchased": r["created_at"],
+                "created_at": r["created_at"],
+                "data": p_data
+            })
+        return result
 
 # Recommendation Eligibility Engine Instance
 eligibility_engine = RecommendationEligibilityEngine()
@@ -1099,6 +1276,7 @@ eligibility_engine = RecommendationEligibilityEngine()
 # =============================================
 class QueryRequest(BaseModel):
     messages: List[Dict[str, Any]]
+    user_id: Optional[str] = None
 
 
 class PaymentVerifyRequest(BaseModel):
@@ -1110,6 +1288,7 @@ class PaymentVerifyRequest(BaseModel):
     place: str
     product_type: Optional[str] = "kundali"
     lang: Optional[str] = "en"
+    user_id: Optional[str] = None
 
 
 # =============================================
@@ -1270,7 +1449,8 @@ def home():
             "invoke": "/invoke (POST)",
             "payment_verify": "/payment/verify (POST)",
             "payment_status": "/payment/status (GET)",
-            "kundali_download": "/kundali/download (GET)"
+            "kundali_download": "/kundali/download (GET)",
+            "reports": "/reports (GET)"
         }
     }
 
@@ -1286,15 +1466,18 @@ def home():
 def invoke_agent(request: QueryRequest, http_request: Request):
     """Main endpoint with ENHANCED multilingual support"""
     
+    user_id = request.user_id
     current_messages = request.messages.copy()
     original_user_query = current_messages[-1]["content"] if current_messages else ""
     conversation_hash = get_conversation_hash(current_messages)
 
+    all_pending = get_all_pending_requests()
+
     safe_print(f"\n{'='*70}")
-    safe_print(f"📍 CONVERSATION: {conversation_hash}")
+    safe_print(f"📍 CONVERSATION: {conversation_hash} | USER_ID: {user_id}")
     safe_print(f"📝 USER QUERY: {original_user_query[:80]}")
     safe_print(f"📊 MESSAGE COUNT: {len(current_messages)}")
-    safe_print(f"⏳ PENDING REQUESTS: {list(pending_payment_requests.keys())}")
+    safe_print(f"⏳ PENDING REQUESTS: {list(all_pending.keys())}")
     safe_print(f"{'='*70}")
 
     user_response_lower = original_user_query.lower().strip()
@@ -1302,14 +1485,16 @@ def invoke_agent(request: QueryRequest, http_request: Request):
     # =========================================================
     # 🔒 STRICT PAYMENT GATEKEEPER - NO LLM BYPASS ALLOWED!
     # =========================================================
-    if conversation_hash in pending_payment_requests:
-        safe_print(f"\n🔒 PENDING PAYMENT DETECTED FOR SESSION: {conversation_hash}")
+    pending_data = get_pending_request(user_id=user_id, conversation_hash=conversation_hash)
+    if pending_data:
+        pending_key = user_id if user_id else conversation_hash
+        safe_print(f"\n🔒 PENDING PAYMENT DETECTED FOR SESSION: {pending_key}")
         
         # 1. User explicitly cancelled
         if is_no_response(user_response_lower):
             safe_print(f"❌ USER CANCELLED PAYMENT")
-            product_type = pending_payment_requests[conversation_hash].get("product_type", "kundali")
-            del pending_payment_requests[conversation_hash]
+            product_type = pending_data.get("product_type", "kundali")
+            delete_pending_request(user_id=user_id, conversation_hash=conversation_hash)
             
             cancel_response = f"✅ {product_type.capitalize()} generation cancelled. Let me know if you change your mind!"
             complete_chat = current_messages + [{"role": "assistant", "content": cancel_response}]
@@ -1326,7 +1511,6 @@ def invoke_agent(request: QueryRequest, http_request: Request):
         # 2. For ANY other message while payment is pending (e.g. 'ya', 'yes', 'yup', 'sure', 'how to pay'):
         # Generate the Razorpay Order & Payment Link!
         safe_print(f"🎯 USER CONFIRMED/REQUESTED PAYMENT! (Query: '{original_user_query}')")
-        pending_data = pending_payment_requests[conversation_hash]
         current_details = pending_data["birth_details"]
         product_type = pending_data.get("product_type", "kundali")
 
@@ -1334,7 +1518,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
         updated_details, is_updated = extract_updates_to_birth_details(current_details, original_user_query)
         if is_updated:
             safe_print(f"✏️ BIRTH DETAILS UPDATED: {updated_details}")
-            pending_payment_requests[conversation_hash]["birth_details"] = updated_details
+            update_pending_request_birth_details(user_id=user_id, conversation_hash=conversation_hash, birth_details=updated_details)
 
             amount = JANMARASHI_PRICE if product_type == "janmarashi" else KUNDALI_PRICE
             product_display = "Janmarashi (Moon Sign)" if product_type == "janmarashi" else "Kundali (Birth Chart)"
@@ -1364,6 +1548,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
                     "status": "awaiting_payment_confirmation",
                     "birth_details": updated_details,
                     "conversation_hash": conversation_hash,
+                    "user_id": user_id,
                     "product_type": product_type,
                     "amount": f"₹{amount}"
                 },
@@ -1394,6 +1579,8 @@ def invoke_agent(request: QueryRequest, http_request: Request):
                 
                 base_url = get_base_url(http_request)
                 payment_link = f"{base_url}/static/payments.html?order_id={order_id}&key_id={RAZORPAY_KEY_ID}&product_type={product_type}&amount={amount}&date={quote(birth_details['date'])}&time={quote(birth_details['time'])}&place={quote(birth_details['place'])}&lang={quote(birth_details.get('lang', 'en'))}"
+                if user_id:
+                    payment_link += f"&user_id={quote(user_id)}"
                 
                 lang_display = LANG_DISPLAY_NAMES.get(birth_details.get('lang', 'en').lower(), 'English')
                 content_lines = [
@@ -1427,7 +1614,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
                 ]
                 
                 # ✅ Clear pending payment request so subsequent queries (e.g. "todays panchang") aren't intercepted!
-                del pending_payment_requests[conversation_hash]
+                delete_pending_request(user_id=user_id, conversation_hash=conversation_hash)
                 
                 return {
                     "messages": complete_chat,
@@ -1454,7 +1641,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
                 }
             else:
                 safe_print("❌ Razorpay order creation failed!")
-                del pending_payment_requests[conversation_hash]
+                delete_pending_request(user_id=user_id, conversation_hash=conversation_hash)
                 error_msg = "❌ Could not create Razorpay order. Please ensure your `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` in `.env` match correctly and the server has been restarted."
                 complete_chat = current_messages + [{"role": "assistant", "content": error_msg}]
                 return {
@@ -1469,7 +1656,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
 
         # 4. If query is neither Yes, No, nor an Update (e.g. user asked "todays panchang" while pending)
         safe_print(f"ℹ️ Clearing pending payment request because user asked new query: '{original_user_query}'")
-        del pending_payment_requests[conversation_hash]
+        delete_pending_request(user_id=user_id, conversation_hash=conversation_hash)
     
     # ========================================
     # CASE 3: NORMAL FLOW
@@ -1540,7 +1727,8 @@ def invoke_agent(request: QueryRequest, http_request: Request):
 
     session_context = {
         "conversation_hash": conversation_hash,
-        "pending_payments": pending_payment_requests,
+        "user_id": user_id,
+        "pending_payments": get_all_pending_requests(),
         "message_count": len(current_messages)
     }
 
@@ -1569,13 +1757,14 @@ def invoke_agent(request: QueryRequest, http_request: Request):
 
         birth_details = extract_birth_details_from_history(current_messages)
         if birth_details:
-            pending_payment_requests[conversation_hash] = {
-                "birth_details": birth_details,
-                "product_type": "janmarashi",
-                "created_at": datetime.now().isoformat()
-            }
+            save_pending_request(
+                conversation_hash=conversation_hash,
+                user_id=user_id,
+                product_type="janmarashi",
+                birth_details=birth_details
+            )
             
-            safe_print(f"✅ Stored pending janmarashi request: {conversation_hash}")
+            safe_print(f"✅ Stored pending janmarashi request: hash={conversation_hash}, user_id={user_id}")
             safe_print(f"📝 Birth Details: {birth_details}")
 
             lang_display = LANG_DISPLAY_NAMES.get(birth_details.get('lang', 'en').lower(), 'English')
@@ -1604,6 +1793,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
                 "status": "awaiting_payment_confirmation",
                 "birth_details": birth_details,
                 "conversation_hash": conversation_hash,
+                "user_id": user_id,
                 "product_type": "janmarashi",
                 "amount": f"₹{JANMARASHI_PRICE}"
             }
@@ -1635,12 +1825,10 @@ def invoke_agent(request: QueryRequest, http_request: Request):
         pid_match = re.search(r'(pay_[A-Za-z0-9]+|order_[A-Za-z0-9]+)', original_user_query)
         if pid_match:
             candidate_id = pid_match.group(1)
-            for oid, pdata in completed_payments.items():
-                if pdata.get("product_type") == "kundali":
-                    if candidate_id in [oid, pdata.get("payment_id")]:
-                        existing_pay_id = candidate_id
-                        existing_record = pdata
-                        break
+            pdata = get_payment_by_order_or_payment_id(candidate_id)
+            if pdata and pdata.get("product_type") == "kundali":
+                existing_pay_id = candidate_id
+                existing_record = pdata
 
         if existing_pay_id and existing_record:
             safe_print(f"✅ Found existing verified Kundali payment for query: {existing_pay_id}")
@@ -1676,13 +1864,14 @@ def invoke_agent(request: QueryRequest, http_request: Request):
         else:
             birth_details = extract_birth_details_from_history(current_messages)
             if birth_details:
-                pending_payment_requests[conversation_hash] = {
-                    "birth_details": birth_details,
-                    "product_type": "kundali",
-                    "created_at": datetime.now().isoformat()
-                }
+                save_pending_request(
+                    conversation_hash=conversation_hash,
+                    user_id=user_id,
+                    product_type="kundali",
+                    birth_details=birth_details
+                )
                 
-                safe_print(f"✅ Stored pending kundali request: {conversation_hash}")
+                safe_print(f"✅ Stored pending kundali request: hash={conversation_hash}, user_id={user_id}")
                 safe_print(f"📝 Birth Details: {birth_details}")
 
                 lang_display = LANG_DISPLAY_NAMES.get(birth_details.get('lang', 'en').lower(), 'English')
@@ -1711,6 +1900,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
                     "status": "awaiting_payment_confirmation",
                     "birth_details": birth_details,
                     "conversation_hash": conversation_hash,
+                    "user_id": user_id,
                     "product_type": "kundali",
                     "amount": f"₹{KUNDALI_PRICE}"
                 }
@@ -1763,12 +1953,13 @@ def invoke_agent(request: QueryRequest, http_request: Request):
 
             birth_details = extract_birth_details_from_history(current_messages)
             if birth_details:
-                pending_payment_requests[conversation_hash] = {
-                    "birth_details": birth_details,
-                    "product_type": "kundali",
-                    "created_at": datetime.now().isoformat()
-                }
-                safe_print(f"✅ Stored pending kundali request via predictive flow: {conversation_hash}")
+                save_pending_request(
+                    conversation_hash=conversation_hash,
+                    user_id=user_id,
+                    product_type="kundali",
+                    birth_details=birth_details
+                )
+                safe_print(f"✅ Stored pending kundali request via predictive flow: hash={conversation_hash}, user_id={user_id}")
 
                 lang_display = LANG_DISPLAY_NAMES.get(birth_details.get('lang', 'en').lower(), 'English')
                 content_lines = [
@@ -1792,6 +1983,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
                     "status": "awaiting_payment_confirmation",
                     "birth_details": birth_details,
                     "conversation_hash": conversation_hash,
+                    "user_id": user_id,
                     "product_type": "kundali",
                     "amount": f"₹{KUNDALI_PRICE}"
                 }
@@ -1838,7 +2030,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
         tool_type=tool_type,
         recommendations=recommendations,
         links=links,
-        pending_requests=pending_payment_requests
+        pending_requests=get_all_pending_requests()
     )
 
     max_prods = decision.get("max_products", 3)
@@ -1879,8 +2071,8 @@ def get_payment_status(order_id: str = Query(...)):
     
     safe_print(f"\n📊 PAYMENT STATUS CHECK: {order_id}")
     
-    if order_id in completed_payments:
-        payment_data = completed_payments[order_id]
+    payment_data = get_payment(order_id)
+    if payment_data:
         safe_print(f"✅ PAYMENT FOUND IN STORAGE: {order_id}")
         
         status = payment_data.get("status", "delivered")
@@ -1902,8 +2094,7 @@ def get_payment_status(order_id: str = Query(...)):
                 lon = location.get("longitude")
                 
                 safe_print(f"✅ Retry succeeded! Updating status to delivered for order {order_id}")
-                payment_data["status"] = "delivered"
-                payment_data["data"] = {
+                updated_data = {
                     "rashi": rashi,
                     "moonLongitude": longitude,
                     "latitude": lat,
@@ -1913,7 +2104,7 @@ def get_payment_status(order_id: str = Query(...)):
                     "place": place,
                     "lang": lang
                 }
-                save_payments_db()
+                update_payment_status(order_id, status="delivered", data=updated_data)
                 
                 return {
                     "success": True,
@@ -1922,7 +2113,7 @@ def get_payment_status(order_id: str = Query(...)):
                     "delivery": "delivered",
                     "order_id": order_id,
                     "product_type": payment_data.get("product_type"),
-                    "data": payment_data.get("data")
+                    "data": updated_data
                 }
             else:
                 safe_print(f"⏳ Retry failed for order {order_id}. Remaining pending_delivery.")
@@ -1974,9 +2165,11 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
     time = request.time
     place = request.place
     product_type = request.product_type or "kundali"
+    user_id = request.user_id
     
     safe_print(f"Order ID: {order_id}")
     safe_print(f"Payment ID: {payment_id}")
+    safe_print(f"User ID: {user_id}")
     safe_print(f"Product Type: {product_type}")
     safe_print(f"Birth Details: Date={date}, Time={time}, Place={place}")
     
@@ -1998,6 +2191,11 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
                 "message": "Payment verification failed: Signature mismatch"
             }
         
+        if not user_id:
+            pending_req = get_pending_request(user_id=None, conversation_hash=None)
+            if pending_req and pending_req.get("user_id"):
+                user_id = pending_req["user_id"]
+
         if product_type == "janmarashi":
             safe_print(f"\n📊 Preparing Janmarashi data...")
             lang = getattr(request, 'lang', 'en') or 'en'
@@ -2016,23 +2214,25 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
                     safe_print(f"   Rashi: {rashi}")
                     safe_print(f"   Longitude: {longitude}")
                     
-                    completed_payments[order_id] = {
-                        "payment_id": payment_id,
-                        "order_id": order_id,
-                        "product_type": "janmarashi",
-                        "status": "delivered",
-                        "data": {
-                            "rashi": rashi,
-                            "moonLongitude": longitude,
-                            "latitude": lat,
-                            "longitude": lon,
-                            "date": date,
-                            "time": time,
-                            "place": place,
-                            "lang": lang
-                        }
+                    pay_data = {
+                        "rashi": rashi,
+                        "moonLongitude": longitude,
+                        "latitude": lat,
+                        "longitude": lon,
+                        "date": date,
+                        "time": time,
+                        "place": place,
+                        "lang": lang
                     }
-                    save_payments_db()
+                    save_payment(
+                        order_id=order_id,
+                        payment_id=payment_id,
+                        user_id=user_id,
+                        product_type="janmarashi",
+                        status="delivered",
+                        data=pay_data
+                    )
+                    delete_pending_request(user_id=user_id)
                     
                     return {
                         "success": True,
@@ -2053,19 +2253,21 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
                     }
                 else:
                     safe_print("⏳ Janmarashi API call failed. Storing order as pending_delivery.")
-                    completed_payments[order_id] = {
-                        "payment_id": payment_id,
-                        "order_id": order_id,
-                        "product_type": "janmarashi",
-                        "status": "pending_delivery",
-                        "data": {
-                            "date": date,
-                            "time": time,
-                            "place": place,
-                            "lang": lang
-                        }
+                    pay_data = {
+                        "date": date,
+                        "time": time,
+                        "place": place,
+                        "lang": lang
                     }
-                    save_payments_db()
+                    save_payment(
+                        order_id=order_id,
+                        payment_id=payment_id,
+                        user_id=user_id,
+                        product_type="janmarashi",
+                        status="pending_delivery",
+                        data=pay_data
+                    )
+                    delete_pending_request(user_id=user_id)
                     return {
                         "success": True,
                         "delivery": "pending",
@@ -2077,19 +2279,21 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
                     }
             except Exception as api_error:
                 safe_print(f"⚠️ Janmarashi API exception ({api_error}). Storing order as pending_delivery.")
-                completed_payments[order_id] = {
-                    "payment_id": payment_id,
-                    "order_id": order_id,
-                    "product_type": "janmarashi",
-                    "status": "pending_delivery",
-                    "data": {
-                        "date": date,
-                        "time": time,
-                        "place": place,
-                        "lang": lang
-                    }
+                pay_data = {
+                    "date": date,
+                    "time": time,
+                    "place": place,
+                    "lang": lang
                 }
-                save_payments_db()
+                save_payment(
+                    order_id=order_id,
+                    payment_id=payment_id,
+                    user_id=user_id,
+                    product_type="janmarashi",
+                    status="pending_delivery",
+                    data=pay_data
+                )
+                delete_pending_request(user_id=user_id)
                 return {
                     "success": True,
                     "delivery": "pending",
@@ -2120,6 +2324,21 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
                 
                 if pdf_response.status_code != 200:
                     print(f"❌ PDF API Error Details: {pdf_response.text}")
+                    pay_data = {
+                        "date": date,
+                        "time": time,
+                        "place": place,
+                        "lang": lang
+                    }
+                    save_payment(
+                        order_id=order_id,
+                        payment_id=payment_id,
+                        user_id=user_id,
+                        product_type="kundali",
+                        status="pending_delivery",
+                        data=pay_data
+                    )
+                    delete_pending_request(user_id=user_id)
                     return {
                         "success": False,
                         "error_type": "pdf_generation_failed",
@@ -2143,19 +2362,22 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
                 base_url = get_base_url(http_request)
                 download_url = f"{base_url}/kundali/download?date={quote(date)}&time={quote(time)}&place={quote(place)}&payment_id={payment_id}&lang={quote(lang)}"
                 
-                completed_payments[order_id] = {
-                    "payment_id": payment_id,
-                    "order_id": order_id,
-                    "product_type": "kundali",
-                    "data": {
-                        "date": date,
-                        "time": time,
-                        "place": place,
-                        "lang": lang,
-                        "download_url": download_url
-                    }
+                pay_data = {
+                    "date": date,
+                    "time": time,
+                    "place": place,
+                    "lang": lang,
+                    "download_url": download_url
                 }
-                save_payments_db()
+                save_payment(
+                    order_id=order_id,
+                    payment_id=payment_id,
+                    user_id=user_id,
+                    product_type="kundali",
+                    status="delivered",
+                    data=pay_data
+                )
+                delete_pending_request(user_id=user_id)
                 
                 return {
                     "success": True,
@@ -2163,6 +2385,7 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
                     "product_type": "kundali",
                     "payment_id": payment_id,
                     "order_id": order_id,
+                    "status": "delivered",
                     "data": {
                         "date": date,
                         "time": time,
@@ -2173,6 +2396,21 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
                     
             except Exception as api_error:
                 print(f"❌ PDF API ERROR: {str(api_error)}")
+                pay_data = {
+                    "date": date,
+                    "time": time,
+                    "place": place,
+                    "lang": lang
+                }
+                save_payment(
+                    order_id=order_id,
+                    payment_id=payment_id,
+                    user_id=user_id,
+                    product_type="kundali",
+                    status="pending_delivery",
+                    data=pay_data
+                )
+                delete_pending_request(user_id=user_id)
                 return {
                     "success": False,
                     "error_type": "api_error",
@@ -2209,12 +2447,8 @@ def download_kundali(
     safe_print(f"Payment ID: {payment_id}")
     
     # 🔒 VERIFY THAT PAYMENT WAS COMPLETED
-    payment_verified = False
-    for order_id, pay_data in completed_payments.items():
-        if pay_data.get("product_type") == "kundali":
-            if payment_id in [order_id, pay_data.get("payment_id")]:
-                payment_verified = True
-                break
+    pdata = get_payment_by_order_or_payment_id(payment_id)
+    payment_verified = (pdata is not None and pdata.get("product_type") == "kundali")
 
     if not payment_verified:
         safe_print(f"❌ DOWNLOAD DENIED: Payment ID {payment_id} is not verified!")
@@ -2272,6 +2506,28 @@ def download_kundali(
     except Exception as e:
         safe_print(f"❌ Download error: {type(e).__name__}: {str(e)}")
         return {"error": f"Download failed: {str(e)}"}
+
+
+# =============================================
+# USER REPORTS ENDPOINT (CHATFIX-3)
+# =============================================
+
+@api.get("/reports")
+def get_user_reports(user_id: str = Query(...)):
+    """Retrieve all delivered reports for a specific user_id"""
+    safe_print(f"\n📑 GET REPORTS FOR USER: {user_id}")
+    if not user_id:
+        return {
+            "success": True,
+            "user_id": user_id,
+            "reports": []
+        }
+    reports = get_delivered_payments_by_user(user_id)
+    return {
+        "success": True,
+        "user_id": user_id,
+        "reports": reports
+    }
 
 
 # =============================================

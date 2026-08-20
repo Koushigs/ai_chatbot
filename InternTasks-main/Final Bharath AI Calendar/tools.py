@@ -9,9 +9,6 @@ from typing import Optional
 # pyrefly: ignore [missing-import]
 from langchain.tools import tool
 
-# NEW API ENDPOINTS
-KUNDALI_PDF_API = "https://www.kundali.bharatcalendars.in:8443/api/kundali/generate-pdf"
-JANMARASHI_API = "https://www.kundali.bharatcalendars.in:8443/api/janamrashi/moon-rashi"
 
 @tool
 def get_horoscope(sign: str, date: str = None, language: str = "EN") -> str:
@@ -38,7 +35,7 @@ def get_horoscope(sign: str, date: str = None, language: str = "EN") -> str:
             "day": formatted_date
         }
         
-        url = "https://api.exaweb.in:3004/api/rashi"
+        url = "https://api.bharatcalendars.in:3004/api/rashi"
         response = requests.get(url, params=params, timeout=10)
         response.raise_for_status()
         
@@ -72,7 +69,7 @@ def get_date_panchang(date: str = None, data_language: str = "EN") -> str:
             now = parser.parse(date)
         
         api_date = now.strftime("%d/%m/%y")
-        url = f"https://api.exaweb.in:3004/api/panchang/daily?date={api_date}&app_language=EN&data_language={data_language}"
+        url = f"https://api.bharatcalendars.in:3004/api/panchang/daily?date={api_date}&app_language=EN&data_language={data_language}"
         
         headers = {"api_key": "anvl_bharat_cal123"}
         response = requests.get(url, headers=headers, timeout=10)
@@ -117,7 +114,7 @@ def get_holidays(year: int = None, data_language: str = "EN") -> str:
     
     try:
         response = requests.get(
-            "https://api.exaweb.in:3004/api/panchang/holiday",
+            "https://api.bharatcalendars.in:3004/api/panchang/holiday",
             params=params,
             headers=headers,
             timeout=10
@@ -161,7 +158,7 @@ def get_monthly_festivals(year: Optional[int] = None, month: Optional[str] = Non
     if not year:
         year = datetime.datetime.now().year
     
-    api_url = "https://api.exaweb.in:3004/api/panchang/festival"
+    api_url = "https://api.bharatcalendars.in:3004/api/panchang/festival"
     headers = {"api_key": "anvl_bharat_cal123"}
     
     # 🔍 If festival_name is provided OR if month is not specified, search across all 12 months for matching festival dates!
