@@ -1031,7 +1031,11 @@ def get_base_url(http_request: Optional[Request] = None) -> str:
 # =============================================
 # SQLITE PERSISTENT STORAGE (CHATFIX-3)
 # =============================================
-DB_PATH = os.path.join(os.path.dirname(__file__), "payments.db")
+# Serverless platforms (e.g. Vercel / AWS Lambda) have read-only file systems except /tmp
+if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+    DB_PATH = "/tmp/payments.db"
+else:
+    DB_PATH = os.path.join(os.path.dirname(__file__), "payments.db")
 
 def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=15.0)
@@ -1039,32 +1043,42 @@ def get_db():
     return conn
 
 def init_db():
-    with get_db() as conn:
-        conn.execute("PRAGMA journal_mode=WAL;")
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS pending_requests (
-                conversation_hash TEXT,
-                user_id TEXT,
-                product_type TEXT,
-                birth_details_json TEXT,
-                created_at TEXT
-            )
-        """)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS payments (
-                order_id TEXT PRIMARY KEY,
-                payment_id TEXT,
-                user_id TEXT,
-                product_type TEXT,
-                status TEXT,
-                data_json TEXT,
-                created_at TEXT
-            )
-        """)
-        conn.commit()
-    safe_print("✅ SQLite database payments.db initialized successfully!")
+    try:
+        with get_db() as conn:
+            try:
+                conn.execute("PRAGMA journal_mode=WAL;")
+            except Exception:
+                pass
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS pending_requests (
+                    conversation_hash TEXT,
+                    user_id TEXT,
+                    product_type TEXT,
+                    birth_details_json TEXT,
+                    created_at TEXT
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS payments (
+                    order_id TEXT PRIMARY KEY,
+                    payment_id TEXT,
+                    user_id TEXT,
+                    product_type TEXT,
+                    status TEXT,
+                    data_json TEXT,
+                    created_at TEXT
+                )
+            """)
+            conn.commit()
+        safe_print("✅ SQLite database payments.db initialized successfully!")
+    except Exception as e:
+        safe_print(f"⚠️ SQLite database initialization warning: {e}")
 
-init_db()
+try:
+    init_db()
+except Exception as e:
+    safe_print(f"⚠️ Warning: Could not initialize SQLite database on startup: {e}")
+
 
 def save_pending_request(conversation_hash: Optional[str], user_id: Optional[str], product_type: str, birth_details: dict, created_at: Optional[str] = None):
     if not created_at:
