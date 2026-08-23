@@ -2011,6 +2011,14 @@ def invoke_agent(request: QueryRequest, http_request: Request):
         try:
             if tool_type == "horoscope":
                 recommendations = get_horoscope_recommendations(final_ai_response, original_user_query)
+                if extracted_entities.get("rashi"):
+                    links["report_upsell"] = {
+                        "type": "kundali_offer",
+                        "price": KUNDALI_PRICE,
+                        "cta": "Get your detailed Kundali report"
+                    }
+                    safe_print(f"✅ Kundali report_upsell attached & recorded for conversation: {conversation_hash}")
+                    safe_print(f"✅ [REPORT_UPSELL_SERVED] type=kundali_offer price={KUNDALI_PRICE} conversation_hash={conversation_hash} tool_type={tool_type} rashi={extracted_entities.get('rashi')}")
 
             elif tool_type == "panchang":
                 recommendations = get_panchang_recommendations()
@@ -2024,12 +2032,19 @@ def invoke_agent(request: QueryRequest, http_request: Request):
             else:
                 if extracted_entities.get("rashi"):
                     recommendations = get_horoscope_recommendations(final_ai_response, original_user_query)
+                    links["report_upsell"] = {
+                        "type": "kundali_offer",
+                        "price": KUNDALI_PRICE,
+                        "cta": "Get your detailed Kundali report"
+                    }
+                    safe_print(f"✅ Kundali report_upsell attached & recorded for conversation: {conversation_hash}")
+                    safe_print(f"✅ [REPORT_UPSELL_SERVED] type=kundali_offer price={KUNDALI_PRICE} conversation_hash={conversation_hash} tool_type={tool_type} rashi={extracted_entities.get('rashi')}")
                 elif extracted_entities.get("festivals"):
                     recommendations = get_monthly_festivals_recommendations(final_ai_response, original_user_query)
                 else:
                     recommendations = get_panchang_recommendations()
 
-            if recommendations:
+            if recommendations or links.get("report_upsell"):
                 eligibility_engine.record_recommendation_served(conversation_hash, len(current_messages))
 
         except Exception as e:

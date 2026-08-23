@@ -10,3 +10,5 @@ test_janmarashi_pending.py
 test_config_prices.py
 test_chatfix9_multilingual.py
 test_chatfix3_sqlite.py
+test_chatfix6_horoscope_upsell.py
+test_all_endpoints.py

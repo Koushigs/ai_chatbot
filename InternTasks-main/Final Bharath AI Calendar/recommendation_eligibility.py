@@ -66,8 +66,9 @@ class RecommendationEligibilityEngine:
         # RULE 1: PAYMENT STATE SUPPRESSION
         # ========================================================
         if self.config.get("enable_payment_suppression", True):
-            # Suppress if conversation is currently in a pending payment state
-            if conversation_hash and conversation_hash in pending_payments:
+            user_id = session_context.get("user_id", "")
+            # Suppress if conversation or user is currently in a pending payment state
+            if (conversation_hash and conversation_hash in pending_payments) or (user_id and user_id in pending_payments):
                 return {
                     "should_recommend": False,
                     "reason": "Affiliate recommendations suppressed during active payment flow.",
