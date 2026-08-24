@@ -36,18 +36,31 @@ EOT
     echo "❗ Please edit .env file to fill in your API secrets before running Docker compose."
 fi
 
-# 5. Build and launch Docker container
+# 5. Fix SQLite & Json volume files (ensure they are files, not auto-created directories)
+echo "💾 Initializing database files..."
+sudo docker compose down || true
+
+if [ -d "payments.db" ]; then sudo rm -rf payments.db; fi
+if [ ! -f "payments.db" ]; then touch payments.db; fi
+
+if [ -d "payments_db.json" ]; then sudo rm -rf payments_db.json; fi
+if [ ! -f "payments_db.json" ]; then echo "{}" > payments_db.json; fi
+
+if [ -d "affiliate_products_cache.json" ]; then sudo rm -rf affiliate_products_cache.json; fi
+if [ ! -f "affiliate_products_cache.json" ]; then echo "{}" > affiliate_products_cache.json; fi
+
+# 6. Build and launch Docker container
 echo "🏗️ Building and starting Docker container..."
 sudo docker compose up -d --build
 
-# 6. Configure Nginx Reverse Proxy
+# 7. Configure Nginx Reverse Proxy
 echo "🌐 Configuring Nginx reverse proxy..."
 sudo cp nginx.conf /etc/nginx/sites-available/bharat-ai
 sudo ln -sf /etc/nginx/sites-available/bharat-ai /etc/nginx/sites-enabled/default
 sudo nginx -t
 sudo systemctl reload nginx
 
-# 7. Configure Firewall (UFW)
+# 8. Configure Firewall (UFW)
 echo "🔒 Configuring UFW Firewall..."
 sudo ufw allow 22/tcp
 sudo ufw allow 80/tcp
