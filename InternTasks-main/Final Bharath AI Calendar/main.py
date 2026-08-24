@@ -972,6 +972,18 @@ api.add_middleware(
 if os.path.exists("static"):
     api.mount("/static", StaticFiles(directory="static"), name="static")
 
+@api.get("/chat_tester.html", response_class=HTMLResponse)
+@api.get("/chat-ui", response_class=HTMLResponse)
+def serve_chat_tester():
+    if os.path.exists("chat_tester.html"):
+        with open("chat_tester.html", "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    elif os.path.exists("static/chat_tester.html"):
+        with open("static/chat_tester.html", "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    return HTMLResponse(content="<h1>Chat tester UI file not found</h1>", status_code=404)
+
+
 
 # =============================================
 # RAZORPAY CONFIGURATION
