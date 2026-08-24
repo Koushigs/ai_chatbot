@@ -64,9 +64,10 @@ sudo systemctl reload nginx
 echo "🔒 Configuring UFW Firewall..."
 sudo ufw allow 22/tcp
 sudo ufw allow 80/tcp
+sudo ufw allow 8001/tcp
 sudo ufw allow 443/tcp
 sudo ufw --force enable
 
 echo "✅ DEPLOYMENT COMPLETE!"
-echo "📍 Access your application live at: http://165.232.177.1"
+echo "📍 Access your application live at: http://165.232.177.1 or http://chat.bharatcalendars.in:8001"
 echo "📜 View container logs anytime using: sudo docker compose logs -f"
