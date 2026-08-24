@@ -38,7 +38,7 @@ fi
 
 # 5. Fix SQLite & Json volume files (ensure they are files, not auto-created directories)
 echo "💾 Initializing database files..."
-sudo docker compose down || true
+sudo docker compose down --remove-orphans || true
 
 if [ -d "payments.db" ]; then sudo rm -rf payments.db; fi
 if [ ! -f "payments.db" ]; then touch payments.db; fi
@@ -49,9 +49,9 @@ if [ ! -f "payments_db.json" ]; then echo "{}" > payments_db.json; fi
 if [ -d "affiliate_products_cache.json" ]; then sudo rm -rf affiliate_products_cache.json; fi
 if [ ! -f "affiliate_products_cache.json" ]; then echo "{}" > affiliate_products_cache.json; fi
 
-# 6. Build and launch Docker container
+# 6. Build and launch Docker container with force recreate
 echo "🏗️ Building and starting Docker container..."
-sudo docker compose up -d --build
+sudo docker compose up -d --build --force-recreate
 
 # 7. Configure Nginx Reverse Proxy
 echo "🌐 Configuring Nginx reverse proxy..."
