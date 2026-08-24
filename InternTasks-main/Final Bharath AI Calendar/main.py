@@ -2087,7 +2087,12 @@ def invoke_agent(request: QueryRequest, http_request: Request):
     else:
         links["recommended_products"] = []
 
+    last_assistant_msg = complete_chat[-1]["content"] if (complete_chat and complete_chat[-1]["role"] == "assistant") else ""
+
     return {
+        "reply": last_assistant_msg,
+        "response": last_assistant_msg,
+        "content": last_assistant_msg,
         "messages": complete_chat,
         "recommendations": recommendations,
         "links": links,
@@ -2096,6 +2101,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
         "has_recommendations": has_recommendations,
         "is_specific_query": is_astro_specific_query(original_user_query) if is_astro_specific_query else False
     }
+
 
 
 # =============================================
