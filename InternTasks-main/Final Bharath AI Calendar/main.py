@@ -2093,6 +2093,12 @@ def invoke_agent(request: QueryRequest, http_request: Request):
         "reply": last_assistant_msg,
         "response": last_assistant_msg,
         "content": last_assistant_msg,
+        "message": last_assistant_msg,
+        "text": last_assistant_msg,
+        "answer": last_assistant_msg,
+        "assistant_message": last_assistant_msg,
+        "data": last_assistant_msg,
+        "result": last_assistant_msg,
         "messages": complete_chat,
         "recommendations": recommendations,
         "links": links,
@@ -2101,6 +2107,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
         "has_recommendations": has_recommendations,
         "is_specific_query": is_astro_specific_query(original_user_query) if is_astro_specific_query else False
     }
+
 
 
 
