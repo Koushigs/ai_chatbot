@@ -1464,21 +1464,17 @@ def call_janmarashi_api(date: str, time: str, place: str, lang: str = "en") -> O
 # HOME ENDPOINT
 # =============================================
 
-@api.get("/")
+@api.get("/", response_class=HTMLResponse)
 def home():
-    """Home endpoint"""
-    return {
-        "status": "success",
-        "message": "Bharat Calendar AI API is running!",
-        "version": "3.8.0",
-        "endpoints": {
-            "invoke": "/invoke (POST)",
-            "payment_verify": "/payment/verify (POST)",
-            "payment_status": "/payment/status (GET)",
-            "kundali_download": "/kundali/download (GET)",
-            "reports": "/reports (GET)"
-        }
-    }
+    """Home endpoint - Serves Chat UI"""
+    if os.path.exists("chat_tester.html"):
+        with open("chat_tester.html", "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    elif os.path.exists("static/chat_tester.html"):
+        with open("static/chat_tester.html", "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    return HTMLResponse(content="<h1>Bharat Calendar AI API is running!</h1>", status_code=200)
+
 
 
 
