@@ -28,5 +28,5 @@ COPY . .
 # Expose FastAPI application port
 EXPOSE 8000
 
-# Run Gunicorn with Uvicorn async workers for high-concurrency production serving
-CMD ["gunicorn", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "main:app", "--bind", "0.0.0.0:8000", "--timeout", "120"]
+# Run Uvicorn directly with 4 workers
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
