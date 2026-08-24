@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bharat_ai_calendar_app
+    restart: always
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      # Persist SQLite database across container rebuilds & restarts
+      - ./payments.db:/app/payments.db
+      - ./payments_db.json:/app/payments_db.json
+      # Optional: persist product cache if updated at runtime
+      - ./affiliate_products_cache.json:/app/affiliate_products_cache.json
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/docs || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
