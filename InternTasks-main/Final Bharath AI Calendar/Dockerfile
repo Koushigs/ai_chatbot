@@ -28,5 +28,5 @@ COPY . .
 # Expose FastAPI application port
 EXPOSE 8000
 
-# Run Uvicorn directly with 4 workers
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+# Run Uvicorn tuned for 2 vCPU server
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
