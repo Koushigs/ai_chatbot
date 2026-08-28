@@ -19,6 +19,7 @@ from product_formatter import (
     extract_rashi_from_horoscope, extract_rashi_from_query, extract_ALL_festivals_from_response,
     extract_lucky_number_from_horoscope, extract_lucky_color_from_horoscope
 )
+from affiliate_products import tag_link, tool_type_to_placement, tag_recommendations_dict
 import requests
 from config import (
     KUNDALI_PRICE, JANMARASHI_PRICE, BHARAT_CA_BUNDLE,
@@ -1487,6 +1488,7 @@ def home():
 @api.post("/invoke")
 def invoke_agent(request: QueryRequest, http_request: Request):
     """Main endpoint with ENHANCED multilingual support"""
+    t_start = time.time()
     
     user_id = request.user_id
     current_messages = request.messages.copy()
@@ -1723,6 +1725,8 @@ def invoke_agent(request: QueryRequest, http_request: Request):
         safe_print(f"⚠️ Agent execution interrupted: {e}")
         final_ai_response = "Request was cancelled or server was restarted."
 
+    t_ai_done = time.time()
+
     safe_print(f"AI Response (raw): {final_ai_response[:150]}...")
     
     clean_response = clean_markdown(final_ai_response)
@@ -1746,6 +1750,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
         "lucky_number": extract_lucky_number_from_horoscope(final_ai_response),
         "lucky_color": extract_lucky_color_from_horoscope(final_ai_response),
     }
+    t_detect_done = time.time()
 
     session_context = {
         "conversation_hash": conversation_hash,
@@ -1762,6 +1767,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
         ai_response=final_ai_response,
         session_context=session_context
     )
+    t_engine_done = time.time()
 
     safe_print(f"\n🧠 RECOMMENDATION ELIGIBILITY DECISION:")
     safe_print(f"   Should Recommend: {decision['should_recommend']}")
@@ -2071,21 +2077,32 @@ def invoke_agent(request: QueryRequest, http_request: Request):
     )
 
     max_prods = decision.get("max_products", 3)
+    placement = tool_type_to_placement(tool_type)
+    if recommendations:
+        recommendations = tag_recommendations_dict(recommendations, placement)
     if recommended_items:
         links["recommended_products"] = [
             {
                 "title": item["name"],
                 "name": item["name"],
-                "url": item["link"],
-                "link": item["link"],
+                "url": tag_link(item["link"], placement),
+                "link": tag_link(item["link"], placement),
                 "price": item["price"],
                 "category": item["category"],
-                "image": item.get("image", "")
+                "image": item.get("image", ""),
+                "placement": placement
             }
             for item in recommended_items[:max_prods]
         ]
-    else:
-        links["recommended_products"] = []
+    t_total = time.time() - t_start
+    safe_print(f"\n⏱️  =================== TIMING PROFILER SUMMARY ===================")
+    safe_print(f"    1. AI Generation (Sarvam AI / LangChain) : {t_ai_done - t_start:.2f}s")
+    safe_print(f"    2. Multilingual Tool & Entity Extraction : {t_detect_done - t_ai_done:.2f}s")
+    safe_print(f"    3. Recommendation Eligibility Engine     : {t_engine_done - t_detect_done:.2f}s")
+    safe_print(f"    4. Product Assembly & Link Formatting    : {t_total - (t_engine_done - t_start):.2f}s")
+    safe_print(f"    --------------------------------------------------------------")
+    safe_print(f"    📊 TOTAL PROCESSING TIME                 : {t_total:.2f} seconds")
+    safe_print(f"==================================================================\n")
 
     return {
         "messages": complete_chat,

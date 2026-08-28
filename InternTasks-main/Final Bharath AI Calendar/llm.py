@@ -16,4 +16,9 @@ model = ChatOpenAI(
     temperature=0.2,
 )
 
-print("Sarvam AI model initialized successfully using ChatOpenAI client.")
+print("Sarvam AI (sarvam-105b) model initialized successfully using ChatOpenAI client.")
+
+
+
+
+

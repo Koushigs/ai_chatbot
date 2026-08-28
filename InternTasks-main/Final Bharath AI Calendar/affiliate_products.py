@@ -4,6 +4,7 @@ Fetches and matches live product recommendations from https://api.bharatcalendar
 """
 
 import urllib.request
+import urllib.parse
 import json
 import re
 import os
@@ -13,6 +14,131 @@ from config import BHARAT_CA_BUNDLE, AFFILIATE_API_URL
 API_URL = AFFILIATE_API_URL
 CACHE_FILE = os.path.join(os.path.dirname(__file__), "affiliate_products_cache.json")
 CACHE_TTL = 3600  # 1 hour cache TTL
+
+# Placement tracking configurations (CHATFIX-7)
+EXISTING_AMAZON_TAG = "mobilestartup-21"
+
+PLACEMENT_TAGS = {
+    "chat_horoscope": EXISTING_AMAZON_TAG,
+    "chat_panchang": EXISTING_AMAZON_TAG,
+    "chat_festival": EXISTING_AMAZON_TAG,
+    "chat_predictive": EXISTING_AMAZON_TAG,
+    "pdf_report": EXISTING_AMAZON_TAG,
+}
+
+SUPPORTED_PLACEMENTS = set(PLACEMENT_TAGS.keys())
+
+
+def is_amazon_url(url: str) -> bool:
+    """Check if a URL points to Amazon website or shortener"""
+    if not url or not isinstance(url, str):
+        return False
+    parsed = urllib.parse.urlparse(url)
+    netloc = parsed.netloc.lower()
+    return "amazon." in netloc or "amzn." in netloc or netloc.endswith("amzn.to")
+
+
+def tag_link(url: str, placement: str) -> str:
+    """
+    Add per-placement tracking parameters to affiliate and store URLs (CHATFIX-7).
+    - Amazon URLs: Ensure/preserve Amazon `tag` parameter and set `src=<placement>`.
+    - Own-store URLs: Set `src=<placement>` without adding `tag`.
+    """
+    if not url or not isinstance(url, str):
+        return url
+
+    parsed = urllib.parse.urlparse(url)
+    query_tuples = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+
+    param_dict = {}
+    param_order = []
+    for k, v in query_tuples:
+        if k not in param_dict:
+            param_order.append(k)
+        param_dict[k] = v
+
+    is_amazon = is_amazon_url(url)
+    amazon_tag = PLACEMENT_TAGS.get(placement, EXISTING_AMAZON_TAG)
+
+    if is_amazon:
+        if "tag" not in param_dict:
+            param_dict["tag"] = amazon_tag
+            param_order.append("tag")
+        elif placement in PLACEMENT_TAGS and param_dict["tag"] != PLACEMENT_TAGS[placement]:
+            param_dict["tag"] = PLACEMENT_TAGS[placement]
+
+    if "src" not in param_dict:
+        param_dict["src"] = placement
+        param_order.append("src")
+    else:
+        param_dict["src"] = placement
+
+    new_query_tuples = [(k, param_dict[k]) for k in param_order]
+    new_query = urllib.parse.urlencode(new_query_tuples)
+
+    new_parsed = parsed._replace(query=new_query)
+    return urllib.parse.urlunparse(new_parsed)
+
+
+def tool_type_to_placement(tool_type: str) -> str:
+    """
+    Map tool_type to placement identifier for tracking.
+    Mappings:
+      - Horoscope -> chat_horoscope
+      - Panchang -> chat_panchang
+      - Festival -> chat_festival
+      - Predictive -> chat_predictive
+      - PDF report -> pdf_report
+    """
+    if not tool_type:
+        return "chat_horoscope"
+    t_lower = str(tool_type).strip().lower()
+    if t_lower == "horoscope":
+        return "chat_horoscope"
+    elif t_lower == "panchang":
+        return "chat_panchang"
+    elif t_lower in ["monthly_festivals", "holidays", "festival", "festivals"]:
+        return "chat_festival"
+    elif t_lower.startswith("predictive") or t_lower == "predictive":
+        return "chat_predictive"
+    elif t_lower in ["kundali", "janmarashi", "pdf_report"]:
+        return "pdf_report"
+    return "chat_horoscope"
+
+
+def tag_recommendations_dict(recommendations: dict, placement: str) -> dict:
+    """
+    Tag any product links inside the recommendations dictionary with placement tracking ID.
+    """
+    if not recommendations or not isinstance(recommendations, dict):
+        return recommendations
+    tagged = {}
+    for key, val in recommendations.items():
+        if isinstance(val, dict):
+            sub_val = dict(val)
+            if "link" in sub_val and isinstance(sub_val["link"], str):
+                sub_val["link"] = tag_link(sub_val["link"], placement)
+            if "url" in sub_val and isinstance(sub_val["url"], str):
+                sub_val["url"] = tag_link(sub_val["url"], placement)
+            tagged[key] = sub_val
+        elif isinstance(val, list):
+            new_list = []
+            for elem in val:
+                if isinstance(elem, dict):
+                    sub_elem = dict(elem)
+                    if "link" in sub_elem and isinstance(sub_elem["link"], str):
+                        sub_elem["link"] = tag_link(sub_elem["link"], placement)
+                    if "url" in sub_elem and isinstance(sub_elem["url"], str):
+                        sub_elem["url"] = tag_link(sub_elem["url"], placement)
+                    new_list.append(sub_elem)
+                else:
+                    new_list.append(elem)
+            tagged[key] = new_list
+        else:
+            tagged[key] = val
+    return tagged
+
+
 
 
 class AffiliateProductManager:

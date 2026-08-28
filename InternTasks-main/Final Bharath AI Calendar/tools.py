@@ -6,6 +6,7 @@ import requests
 import pytz
 from dateutil import parser
 from typing import Optional
+from concurrent.futures import ThreadPoolExecutor
 # pyrefly: ignore [missing-import]
 from langchain.tools import tool
 
@@ -161,29 +162,37 @@ def get_monthly_festivals(year: Optional[int] = None, month: Optional[str] = Non
     api_url = "https://api.bharatcalendars.in:3004/api/panchang/festival"
     headers = {"api_key": "anvl_bharat_cal123"}
     
-    # 🔍 If festival_name is provided OR if month is not specified, search across all 12 months for matching festival dates!
+    # 🔍 If festival_name is provided OR if month is not specified, search across all 12 months in PARALLEL!
     if festival_name or not month:
         months_to_check = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]
         found_festivals = []
         target_kw = festival_name.lower().strip() if festival_name else ""
 
-        for m in months_to_check:
+        def fetch_month(m):
             try:
                 params = {"year": year, "month": m, "data_language": data_language, "app_language": "EN"}
                 res = requests.get(api_url, params=params, headers=headers, timeout=5)
                 if res.status_code == 200:
                     data = res.json()
                     if isinstance(data, list):
+                        m_found = []
                         for item in data:
                             fest_list = item.get("festivals", [])
                             fest_str = " ".join(fest_list).lower()
                             if target_kw:
                                 if target_kw in fest_str or any(k in fest_str for k in target_kw.split() if len(k) > 2):
-                                    found_festivals.append(item)
+                                    m_found.append(item)
                             elif not month:
-                                found_festivals.append(item)
+                                m_found.append(item)
+                        return m_found
             except Exception:
-                continue
+                pass
+            return []
+
+        with ThreadPoolExecutor(max_workers=12) as executor:
+            results = executor.map(fetch_month, months_to_check)
+            for r in results:
+                found_festivals.extend(r)
         
         if found_festivals:
             trimmed_list = []
