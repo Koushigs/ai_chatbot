@@ -81,14 +81,22 @@ def get_date_panchang(date: str = None, data_language: str = "EN") -> str:
         if not isinstance(data, dict) or not data:
             return "ERROR get_date_panchang: Received empty or invalid data from API."
         
-        # 🚀 OPTIMIZATION: Prune heavy unused metadata keys to accelerate LLM inference speed by 70%
+        # 🚀 OPTIMIZATION: Prune heavy unused metadata keys while preserving all timing/muhurat, Choghadiya, and Hora data
         essential_keys = [
             'date', 'location', 'Sunrise', 'Sunset', 'Moonrise', 'Moonset',
             'Tithi', 'Nakshatra', 'Yoga', 'Karana', 'Weekday', 'Paksha',
             'Shaka Samvat', 'Chandramasa', 'Vikram Samvat', 'Moonsign', 'Sunsign',
-            'Abhijit', 'Rahu Kalam', 'Yamaganda', 'Gulikai Kalam', 'festivals'
+            'Abhijit', 'Rahu Kalam', 'Yamaganda', 'Gulikai Kalam', 'festivals',
+            'Choghadiya', 'Hora', 'Day Choghadiya', 'Night Choghadiya',
+            'Day Hora', 'Night Hora', 'Chogadia', 'Horai',
+            'Brahma Muhurta', 'Vijaya Muhurta', 'Godhuli Muhurta', 'Amrit Kalam',
+            'Nishita Muhurta', 'Dur Muhurtam', 'Varjyam'
         ]
-        trimmed_data = {k: data[k] for k in essential_keys if k in data}
+        trimmed_data = {}
+        for k, v in data.items():
+            k_lower = k.lower()
+            if k in essential_keys or 'choghadi' in k_lower or 'chogadi' in k_lower or ('hora' in k_lower and k_lower != 'thoran'):
+                trimmed_data[k] = v
         
         return json.dumps(trimmed_data if trimmed_data else data)
     

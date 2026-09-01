@@ -259,8 +259,31 @@ def get_horoscope_recommendations(horoscope_response: str, user_query: str = "")
     return recommendations
 
 
-def get_panchang_recommendations() -> dict:
-    """Get panchang recommendations - ONLY Panchang Calendar/Almanac product"""
+def get_panchang_recommendations(user_query: str = "") -> dict:
+    """Get panchang/muhurat recommendations based on query context."""
+    user_lower = (user_query or "").lower()
+    
+    # Griha Pravesh or pooja-related muhurat questions -> allow pooja item recommendations & panchang
+    pooja_keywords = ["griha pravesh", "grah pravesh", "pooja", "puja", "havan", "katha", "satyanarayan", "housewarming"]
+    if any(kw in user_lower for kw in pooja_keywords):
+        return {
+            "products": [
+                {
+                    "name": PANCHANG_PRODUCTS[1]['name'],  # Puja Essentials Kit
+                    "link": PANCHANG_PRODUCTS[1]['link'],
+                    "price": PANCHANG_PRODUCTS[1].get('price', ''),
+                    "image": PANCHANG_PRODUCTS[1].get('image', '')
+                },
+                {
+                    "name": PANCHANG_PRODUCTS[0]['name'],  # Panchang Calendar
+                    "link": PANCHANG_PRODUCTS[0]['link'],
+                    "price": PANCHANG_PRODUCTS[0].get('price', ''),
+                    "image": PANCHANG_PRODUCTS[0].get('image', '')
+                }
+            ]
+        }
+    
+    # Default Panchang / Muhurat Almanac product (No gemstones or random products)
     return {
         "products": [
             {

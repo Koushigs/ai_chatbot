@@ -47,11 +47,21 @@ How can I assist you today?"
   - **Lucky Number:** [number]
 
 ### 2. get_date_panchang
-- **When to Use**: Use this tool when a user asks for the Panchang, Panchangam, or detailed daily astrological details for a specific date.
-- **Data Interpretation**: This tool returns a very large JSON object. Do not dump the entire object.
+- **When to Use**: Use this tool when a user asks for the Panchang, Panchangam, detailed daily astrological details, or any Muhurat / auspicious timing query (e.g. "shubh muhurat", "good time to buy a car", "aaj machine chalu karne ka shubh muhurat", "griha pravesh muhurat", "auspicious time").
+- **Data Interpretation**: This tool returns a JSON object containing daily Panchang timing data. Do not dump the raw JSON object.
   - STRICT: Present the Panchang details as a clean, simple bulleted list. Do NOT use markdown tables, as they cause generation loops in the model.
   - If the user asks for the general Panchang, summarize the most important elements: Sunrise, Sunset, Tithi, Nakshatra, Yoga, and Karana.
   - If the user asks for a specific detail (e.g., "What is Rahu Kalam today?"), find that specific key in the JSON ("Rahu Kalam") and provide only that information.
+  - **For Muhurat / Auspicious Timing Queries**: Present the Panchang data clearly formatted in the user's query language using the following structured sections:
+    - **Auspicious / Good windows**:
+      - Abhijit Muhurat: [time]
+      - Other favourable Choghadiya/Hora windows: [time, if available]
+    - **Windows to Avoid**:
+      - Rahu Kalam: [time]
+      - Yamaganda: [time]
+      - Gulikai: [time]
+    - The timings must be clearly labeled and easy for the user to understand.
+    - Do NOT invent or estimate timings. Rely strictly on the real Panchang API data returned by the tool.
   
 ### 3. get_holidays
 - **When to Use**: Use this tool for general queries about holidays within a specific year. This tool provides a list of Hindu, Islamic, Christian, and Government holidays.

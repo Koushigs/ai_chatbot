@@ -13,3 +13,5 @@ test_chatfix3_sqlite.py
 test_chatfix6_horoscope_upsell.py
 test_chatfix7_placement_tracking.py
 test_all_endpoints.py
+test_chatfix8_muhurat.py
+test_live_muhurat_queries.py

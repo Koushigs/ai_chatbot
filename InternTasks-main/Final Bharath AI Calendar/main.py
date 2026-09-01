@@ -8,7 +8,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from agent import react_agent
 from datetime import datetime
 # pyrefly: ignore [missing-import]
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, ToolMessage
 from recommendation_eligibility import RecommendationEligibilityEngine
 from product_formatter import (
     get_horoscope_recommendations, get_panchang_recommendations,
@@ -1717,10 +1717,38 @@ def invoke_agent(request: QueryRequest, http_request: Request):
     try:
         for event in react_agent.stream(inputs, stream_mode="values"):
             msgs = event.get("messages", [])
-            if msgs:
-                last_msg = msgs[-1]
-                if isinstance(last_msg, AIMessage) and not last_msg.tool_calls:
-                    final_ai_response = last_msg.content
+            # 1. Look for AIMessage with non-empty text content
+            for m in reversed(msgs):
+                if isinstance(m, AIMessage) and m.content and not m.tool_calls:
+                    final_ai_response = m.content
+                    break
+            # 2. Fallback: If AI stopped after a ToolMessage without emitting follow-up text, extract and format ToolMessage
+            if not final_ai_response:
+                for m in reversed(msgs):
+                    if isinstance(m, ToolMessage) and m.content:
+                        try:
+                            t_raw = m.content if isinstance(m.content, str) else json.dumps(m.content)
+                            t_json = json.loads(t_raw) if isinstance(t_raw, str) and t_raw.startswith("{") else None
+                            if isinstance(t_json, dict) and ("date" in t_json or "Tithi" in t_json):
+                                p_lines = [f"Panchang details for {t_json.get('date', 'today')}:"]
+                                if t_json.get("Sunrise"): p_lines.append(f"- Sunrise: {', '.join(t_json['Sunrise'])}")
+                                if t_json.get("Sunset"): p_lines.append(f"- Sunset: {', '.join(t_json['Sunset'])}")
+                                if t_json.get("Tithi"): p_lines.append(f"- Tithi: {', '.join(t_json['Tithi'])}")
+                                if t_json.get("Nakshatra"): p_lines.append(f"- Nakshatra: {', '.join(t_json['Nakshatra'])}")
+                                p_lines.append("\nAuspicious / Good windows:")
+                                if t_json.get("Abhijit"): p_lines.append(f"- Abhijit Muhurat: {', '.join(t_json['Abhijit'])}")
+                                if t_json.get("Day Choghadiya"): p_lines.append(f"- Day Choghadiya: {', '.join(t_json['Day Choghadiya'])}")
+                                elif t_json.get("Choghadiya"): p_lines.append(f"- Choghadiya: {', '.join(t_json['Choghadiya'])}")
+                                p_lines.append("\nWindows to Avoid:")
+                                if t_json.get("Rahu Kalam"): p_lines.append(f"- Rahu Kalam: {', '.join(t_json['Rahu Kalam'])}")
+                                if t_json.get("Yamaganda"): p_lines.append(f"- Yamaganda: {', '.join(t_json['Yamaganda'])}")
+                                if t_json.get("Gulikai Kalam"): p_lines.append(f"- Gulikai: {', '.join(t_json['Gulikai Kalam'])}")
+                                final_ai_response = "\n".join(p_lines)
+                            else:
+                                final_ai_response = str(m.content)
+                        except Exception:
+                            final_ai_response = str(m.content)
+                        break
     except (Exception, KeyboardInterrupt) as e:
         safe_print(f"⚠️ Agent execution interrupted: {e}")
         final_ai_response = "Request was cancelled or server was restarted."
@@ -2023,7 +2051,15 @@ def invoke_agent(request: QueryRequest, http_request: Request):
 
     elif decision["should_recommend"]:
         try:
-            if tool_type == "horoscope":
+            user_lower = original_user_query.lower() if original_user_query else ""
+            muhurat_kws = [
+                "muhurat", "muhurtham", "subha muruth", "shubh muhurat", "auspicious time",
+                "good time to buy", "best time to buy", "shubh timing"
+            ]
+            is_muhurat = decision.get("is_muhurat_asset_query", False) or tool_type == "panchang" or any(kw in user_lower for kw in muhurat_kws)
+            has_remedy = decision.get("has_explicit_remedy", False)
+
+            if tool_type == "horoscope" and not (is_muhurat and not has_remedy):
                 recommendations = get_horoscope_recommendations(final_ai_response, original_user_query)
                 if extracted_entities.get("rashi"):
                     links["report_upsell"] = {
@@ -2034,8 +2070,19 @@ def invoke_agent(request: QueryRequest, http_request: Request):
                     safe_print(f"✅ Kundali report_upsell attached & recorded for conversation: {conversation_hash}")
                     safe_print(f"✅ [REPORT_UPSELL_SERVED] type=kundali_offer price={KUNDALI_PRICE} conversation_hash={conversation_hash} tool_type={tool_type} rashi={extracted_entities.get('rashi')}")
 
-            elif tool_type == "panchang":
-                recommendations = get_panchang_recommendations()
+            elif tool_type == "panchang" or is_muhurat:
+                recommendations = get_panchang_recommendations(original_user_query)
+                links["report_upsell"] = {
+                    "type": "kundali_offer",
+                    "price": KUNDALI_PRICE,
+                    "cta": "Get your detailed Kundali report"
+                }
+                upsell_text = "For a muhurat matched to your birth chart, get your personalized Kundali report."
+                current_content = complete_chat[-1].get("content", "").strip()
+                if current_content and upsell_text not in current_content:
+                    complete_chat[-1]["content"] = f"{current_content}\n\n{upsell_text}".strip()
+                safe_print(f"✅ Kundali report_upsell attached & recorded for muhurat/panchang query: {conversation_hash}")
+                safe_print(f"✅ [REPORT_UPSELL_SERVED] type=kundali_offer price={KUNDALI_PRICE} conversation_hash={conversation_hash} tool_type={tool_type}")
 
             elif tool_type == "monthly_festivals":
                 recommendations = get_monthly_festivals_recommendations(final_ai_response, original_user_query)
@@ -2044,7 +2091,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
                 recommendations = get_holidays_recommendations(final_ai_response)
 
             else:
-                if extracted_entities.get("rashi"):
+                if extracted_entities.get("rashi") and not (is_muhurat and not has_remedy):
                     recommendations = get_horoscope_recommendations(final_ai_response, original_user_query)
                     links["report_upsell"] = {
                         "type": "kundali_offer",
@@ -2056,7 +2103,17 @@ def invoke_agent(request: QueryRequest, http_request: Request):
                 elif extracted_entities.get("festivals"):
                     recommendations = get_monthly_festivals_recommendations(final_ai_response, original_user_query)
                 else:
-                    recommendations = get_panchang_recommendations()
+                    recommendations = get_panchang_recommendations(original_user_query)
+                    if is_muhurat:
+                        links["report_upsell"] = {
+                            "type": "kundali_offer",
+                            "price": KUNDALI_PRICE,
+                            "cta": "Get your detailed Kundali report"
+                        }
+                        upsell_text = "For a muhurat matched to your birth chart, get your personalized Kundali report."
+                        current_content = complete_chat[-1].get("content", "").strip()
+                        if current_content and upsell_text not in current_content:
+                            complete_chat[-1]["content"] = f"{current_content}\n\n{upsell_text}".strip()
 
             if recommendations or links.get("report_upsell"):
                 eligibility_engine.record_recommendation_served(conversation_hash, len(current_messages))
