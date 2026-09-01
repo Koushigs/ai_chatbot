@@ -4,8 +4,12 @@ venv/
 __pycache__/
 *.pyc
 .DS_Store
-payments_db.json
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
 payments.db*
+payments_db.json
 test_janmarashi_pending.py
 test_config_prices.py
 test_chatfix9_multilingual.py
@@ -15,3 +19,4 @@ test_chatfix7_placement_tracking.py
 test_all_endpoints.py
 test_chatfix8_muhurat.py
 test_live_muhurat_queries.py
+test_chatfix10_analytics.py

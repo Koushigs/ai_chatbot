@@ -23,7 +23,7 @@ from affiliate_products import tag_link, tool_type_to_placement, tag_recommendat
 import requests
 from config import (
     KUNDALI_PRICE, JANMARASHI_PRICE, BHARAT_CA_BUNDLE,
-    KUNDALI_PDF_API, JANMARASHI_API
+    KUNDALI_PDF_API, JANMARASHI_API, ADMIN_TOKEN
 )
 import re
 from urllib.parse import urlencode, quote
@@ -1082,6 +1082,23 @@ def init_db():
                     created_at TEXT
                 )
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS chat_turns (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts TEXT,
+                    user_id TEXT,
+                    conversation_hash TEXT,
+                    query_text TEXT,
+                    detected_language TEXT,
+                    tool_type TEXT,
+                    llm_latency_ms INTEGER,
+                    fallback_used INTEGER,
+                    products_shown_json TEXT,
+                    upsell_shown TEXT,
+                    eligibility_score REAL,
+                    eligibility_reason TEXT
+                )
+            """)
             conn.commit()
         safe_print("✅ SQLite database payments.db initialized successfully!")
     except Exception as e:
@@ -1296,6 +1313,79 @@ def get_delivered_payments_by_user(user_id: str) -> list:
 
 # Recommendation Eligibility Engine Instance
 eligibility_engine = RecommendationEligibilityEngine()
+
+def safe_log_chat_turn(
+    ts: Optional[str] = None,
+    user_id: Optional[str] = None,
+    conversation_hash: Optional[str] = None,
+    query_text: Optional[str] = None,
+    detected_language: Optional[str] = None,
+    tool_type: Optional[str] = None,
+    llm_latency_ms: int = 0,
+    fallback_used: bool = False,
+    products_shown: Optional[Any] = None,
+    upsell_shown: Any = None,
+    eligibility_score: float = 0.0,
+    eligibility_reason: Optional[str] = None
+):
+    """
+    Safely write per-turn analytics log row to chat_turns database table.
+    Wrapped in try/except to guarantee zero disruption to existing invoke user response flow.
+    """
+    try:
+        if not ts:
+            ts = datetime.now().isoformat()
+        
+        q_text = str(query_text) if query_text is not None else ""
+        
+        if products_shown is None:
+            products_shown_list = []
+        elif isinstance(products_shown, list):
+            products_shown_list = products_shown
+        elif isinstance(products_shown, dict):
+            products_shown_list = [v for v in products_shown.values()]
+        else:
+            products_shown_list = []
+            
+        products_json = json.dumps(products_shown_list, ensure_ascii=False)
+        
+        if upsell_shown is None or upsell_shown == False or upsell_shown == 0 or upsell_shown == "" or upsell_shown == "0":
+            upsell_val = "0"
+        elif upsell_shown == True or upsell_shown == 1:
+            upsell_val = "1"
+        else:
+            upsell_val = str(upsell_shown)
+            
+        fallback_val = 1 if fallback_used else 0
+        
+        with get_db() as conn:
+            conn.execute(
+                """
+                INSERT INTO chat_turns (
+                    ts, user_id, conversation_hash, query_text, detected_language,
+                    tool_type, llm_latency_ms, fallback_used, products_shown_json,
+                    upsell_shown, eligibility_score, eligibility_reason
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    ts,
+                    user_id,
+                    conversation_hash,
+                    q_text,
+                    detected_language or "en",
+                    tool_type,
+                    int(llm_latency_ms),
+                    fallback_val,
+                    products_json,
+                    upsell_val,
+                    float(eligibility_score or 0.0),
+                    eligibility_reason
+                )
+            )
+            conn.commit()
+    except Exception as e:
+        safe_print(f"⚠️ safe_log_chat_turn exception suppressed: {e}")
+
 
 
 # =============================================
@@ -1522,6 +1612,23 @@ def invoke_agent(request: QueryRequest, http_request: Request):
             
             cancel_response = f"✅ {product_type.capitalize()} generation cancelled. Let me know if you change your mind!"
             complete_chat = current_messages + [{"role": "assistant", "content": cancel_response}]
+            try:
+                safe_log_chat_turn(
+                    ts=datetime.now().isoformat(),
+                    user_id=user_id,
+                    conversation_hash=conversation_hash,
+                    query_text=original_user_query,
+                    detected_language=extract_language(original_user_query),
+                    tool_type=product_type,
+                    llm_latency_ms=int((time.time() - t_start) * 1000),
+                    fallback_used=False,
+                    products_shown=[],
+                    upsell_shown=0,
+                    eligibility_score=0.0,
+                    eligibility_reason="Pending payment cancellation"
+                )
+            except Exception as e:
+                safe_print(f"⚠️ Analytics logging error: {e}")
             return {
                 "messages": complete_chat,
                 "recommendations": {},
@@ -1564,6 +1671,23 @@ def invoke_agent(request: QueryRequest, http_request: Request):
             ]
 
             complete_chat = current_messages + [{"role": "assistant", "content": "\n".join(content_lines)}]
+            try:
+                safe_log_chat_turn(
+                    ts=datetime.now().isoformat(),
+                    user_id=user_id,
+                    conversation_hash=conversation_hash,
+                    query_text=original_user_query,
+                    detected_language=extract_language(original_user_query),
+                    tool_type=product_type,
+                    llm_latency_ms=int((time.time() - t_start) * 1000),
+                    fallback_used=False,
+                    products_shown=[],
+                    upsell_shown=0,
+                    eligibility_score=0.0,
+                    eligibility_reason="Birth details update in pending state"
+                )
+            except Exception as e:
+                safe_print(f"⚠️ Analytics logging error: {e}")
             return {
                 "messages": complete_chat,
                 "recommendations": {},
@@ -1640,6 +1764,23 @@ def invoke_agent(request: QueryRequest, http_request: Request):
                 # ✅ Clear pending payment request so subsequent queries (e.g. "todays panchang") aren't intercepted!
                 delete_pending_request(user_id=user_id, conversation_hash=conversation_hash)
                 
+                try:
+                    safe_log_chat_turn(
+                        ts=datetime.now().isoformat(),
+                        user_id=user_id,
+                        conversation_hash=conversation_hash,
+                        query_text=original_user_query,
+                        detected_language=extract_language(original_user_query),
+                        tool_type=product_type,
+                        llm_latency_ms=int((time.time() - t_start) * 1000),
+                        fallback_used=False,
+                        products_shown=[],
+                        upsell_shown="razorpay_payment",
+                        eligibility_score=0.0,
+                        eligibility_reason="Razorpay payment link generated"
+                    )
+                except Exception as e:
+                    safe_print(f"⚠️ Analytics logging error: {e}")
                 return {
                     "messages": complete_chat,
                     "recommendations": {},
@@ -1668,6 +1809,23 @@ def invoke_agent(request: QueryRequest, http_request: Request):
                 delete_pending_request(user_id=user_id, conversation_hash=conversation_hash)
                 error_msg = "❌ Could not create Razorpay order. Please ensure your `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` in `.env` match correctly and the server has been restarted."
                 complete_chat = current_messages + [{"role": "assistant", "content": error_msg}]
+                try:
+                    safe_log_chat_turn(
+                        ts=datetime.now().isoformat(),
+                        user_id=user_id,
+                        conversation_hash=conversation_hash,
+                        query_text=original_user_query,
+                        detected_language=extract_language(original_user_query),
+                        tool_type=product_type,
+                        llm_latency_ms=int((time.time() - t_start) * 1000),
+                        fallback_used=False,
+                        products_shown=[],
+                        upsell_shown=0,
+                        eligibility_score=0.0,
+                        eligibility_reason="Razorpay order creation failed"
+                    )
+                except Exception as e:
+                    safe_print(f"⚠️ Analytics logging error: {e}")
                 return {
                     "messages": complete_chat,
                     "recommendations": {},
@@ -2161,6 +2319,49 @@ def invoke_agent(request: QueryRequest, http_request: Request):
     safe_print(f"    📊 TOTAL PROCESSING TIME                 : {t_total:.2f} seconds")
     safe_print(f"==================================================================\n")
 
+    t_end = time.time()
+    latency_ms = int((t_ai_done - t_start) * 1000) if 't_ai_done' in locals() else int((t_end - t_start) * 1000)
+    
+    is_fallback = False
+    if 'final_ai_response' in locals() and final_ai_response == "Request was cancelled or server was restarted.":
+        is_fallback = True
+
+    prods_shown = links.get("recommended_products", [])
+    if not prods_shown and recommendations:
+        prods_shown = [
+            {"name": k, "link": v, "placement": tool_type_to_placement(tool_type)}
+            for k, v in recommendations.items() if isinstance(v, str)
+        ]
+
+    upsell_info = None
+    if links.get("report_upsell"):
+        upsell_info = links["report_upsell"].get("type", "kundali_offer")
+    elif links.get("payment_link"):
+        upsell_info = "razorpay_payment"
+    elif "upsell_text" in locals() or "report_upsell" in str(links):
+        upsell_info = "kundali_offer"
+
+    elig_score = decision.get("score", 0.0) if 'decision' in locals() and isinstance(decision, dict) else 0.0
+    elig_reason = decision.get("reason", "") if 'decision' in locals() and isinstance(decision, dict) else ""
+
+    try:
+        safe_log_chat_turn(
+            ts=datetime.now().isoformat(),
+            user_id=user_id,
+            conversation_hash=conversation_hash,
+            query_text=original_user_query,
+            detected_language=req_lang if 'req_lang' in locals() else extract_language(original_user_query),
+            tool_type=tool_type if 'tool_type' in locals() else None,
+            llm_latency_ms=latency_ms,
+            fallback_used=is_fallback,
+            products_shown=prods_shown,
+            upsell_shown=upsell_info if upsell_info else 0,
+            eligibility_score=elig_score,
+            eligibility_reason=elig_reason
+        )
+    except Exception as e:
+        safe_print(f"⚠️ Analytics logging error: {e}")
+
     return {
         "messages": complete_chat,
         "recommendations": recommendations,
@@ -2642,6 +2843,175 @@ def get_user_reports(user_id: str = Query(...)):
         "user_id": user_id,
         "reports": reports
     }
+
+
+# =============================================
+# ADMIN STATS ENDPOINT (CHATFIX-10)
+# =============================================
+
+@api.get("/admin/stats")
+def get_admin_stats(request: Request, day: Optional[str] = Query(None), token: Optional[str] = Query(None)):
+    """
+    Admin statistics API endpoint protected by ADMIN_TOKEN.
+    Returns per-turn analytics breakdown for the requested day (YYYY-MM-DD).
+    Supports Authorization: Bearer <ADMIN_TOKEN> header or ?token=<ADMIN_TOKEN> query parameter for browser testing.
+    """
+    expected_token = os.getenv("ADMIN_TOKEN", "test_admin_token_123")
+    
+    auth_header = request.headers.get("Authorization") or request.headers.get("authorization")
+    provided_token = None
+    
+    if auth_header and auth_header.startswith("Bearer "):
+        provided_token = auth_header.split("Bearer ")[1].strip()
+    elif token:
+        provided_token = token.strip()
+    
+    if not provided_token or provided_token != expected_token or not expected_token:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    target_day = day if day else datetime.now().strftime("%Y-%m-%d")
+    
+    try:
+        with get_db() as conn:
+            cursor = conn.execute(
+                """
+                SELECT ts, user_id, conversation_hash, query_text, detected_language,
+                       tool_type, llm_latency_ms, fallback_used, products_shown_json,
+                       upsell_shown, eligibility_score, eligibility_reason
+                FROM chat_turns
+                WHERE substr(ts, 1, 10) = ? OR ts LIKE ?
+                """,
+                (target_day, f"{target_day}%")
+            )
+            rows = cursor.fetchall()
+            
+            turns = len(rows)
+            unique_users_set = set()
+            tool_type_breakdown: Dict[str, int] = {}
+            language_breakdown: Dict[str, int] = {}
+            upsells_shown_count = 0
+            products_shown_count = 0
+            
+            for row in rows:
+                uid = row["user_id"]
+                chash = row["conversation_hash"]
+                if uid and str(uid).strip():
+                    unique_users_set.add(str(uid).strip())
+                elif chash and str(chash).strip():
+                    unique_users_set.add(str(chash).strip())
+                    
+                ttype = row["tool_type"] or "unknown"
+                tool_type_breakdown[ttype] = tool_type_breakdown.get(ttype, 0) + 1
+                
+                lang = row["detected_language"] or "unknown"
+                language_breakdown[lang] = language_breakdown.get(lang, 0) + 1
+                
+                upsell_val = str(row["upsell_shown"] or "0").strip()
+                if upsell_val not in ["0", "False", "false", "", "None", "null"]:
+                    upsells_shown_count += 1
+                    
+                p_json = row["products_shown_json"]
+                if p_json:
+                    try:
+                        p_data = json.loads(p_json)
+                        if isinstance(p_data, list):
+                            products_shown_count += len(p_data)
+                        elif isinstance(p_data, dict):
+                            products_shown_count += len(p_data)
+                    except Exception:
+                        pass
+                        
+            return {
+                "turns": turns,
+                "unique_users": len(unique_users_set),
+                "tool_type_breakdown": tool_type_breakdown,
+                "language_breakdown": language_breakdown,
+                "upsells_shown": upsells_shown_count,
+                "products_shown": products_shown_count
+            }
+    except Exception as e:
+        safe_print(f"❌ Error in /admin/stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api.get("/admin/turns")
+def get_admin_turns(request: Request, day: Optional[str] = Query(None), token: Optional[str] = Query(None)):
+    """
+    Admin endpoint to retrieve full detailed turn data (including query_text) in JSON format.
+    Supports Authorization: Bearer <ADMIN_TOKEN> header or ?token=<ADMIN_TOKEN> query parameter.
+    """
+    expected_token = os.getenv("ADMIN_TOKEN", "test_admin_token_123")
+    
+    auth_header = request.headers.get("Authorization") or request.headers.get("authorization")
+    provided_token = None
+    
+    if auth_header and auth_header.startswith("Bearer "):
+        provided_token = auth_header.split("Bearer ")[1].strip()
+    elif token:
+        provided_token = token.strip()
+    
+    if not provided_token or provided_token != expected_token or not expected_token:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    target_day = day if day else datetime.now().strftime("%Y-%m-%d")
+    
+    try:
+        with get_db() as conn:
+            if target_day.lower() == "all":
+                cursor = conn.execute(
+                    """
+                    SELECT id, ts, user_id, conversation_hash, query_text, detected_language,
+                           tool_type, llm_latency_ms, fallback_used, products_shown_json,
+                           upsell_shown, eligibility_score, eligibility_reason
+                    FROM chat_turns
+                    ORDER BY id ASC
+                    """
+                )
+            else:
+                cursor = conn.execute(
+                    """
+                    SELECT id, ts, user_id, conversation_hash, query_text, detected_language,
+                           tool_type, llm_latency_ms, fallback_used, products_shown_json,
+                           upsell_shown, eligibility_score, eligibility_reason
+                    FROM chat_turns
+                    WHERE substr(ts, 1, 10) = ? OR ts LIKE ?
+                    ORDER BY id ASC
+                    """,
+                    (target_day, f"{target_day}%")
+                )
+            rows = cursor.fetchall()
+            turns_list = []
+            for row in rows:
+                p_json = row["products_shown_json"]
+                try:
+                    p_data = json.loads(p_json) if p_json else []
+                except Exception:
+                    p_data = p_json
+                    
+                turns_list.append({
+                    "id": row["id"],
+                    "ts": row["ts"],
+                    "user_id": row["user_id"],
+                    "conversation_hash": row["conversation_hash"],
+                    "query_text": row["query_text"],
+                    "detected_language": row["detected_language"],
+                    "tool_type": row["tool_type"],
+                    "llm_latency_ms": row["llm_latency_ms"],
+                    "fallback_used": bool(row["fallback_used"]),
+                    "products_shown": p_data,
+                    "upsell_shown": row["upsell_shown"],
+                    "eligibility_score": row["eligibility_score"],
+                    "eligibility_reason": row["eligibility_reason"]
+                })
+                
+            return {
+                "day": target_day,
+                "total_turns": len(turns_list),
+                "turns": turns_list
+            }
+    except Exception as e:
+        safe_print(f"❌ Error in /admin/turns: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # =============================================
