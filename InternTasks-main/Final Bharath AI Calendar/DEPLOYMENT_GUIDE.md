@@ -63,12 +63,12 @@ nano .env
 Paste your production secrets:
 ```env
 SARVAM_API_KEY=your_sarvam_api_key_here
-RAZORPAY_KEY_ID=your_razorpay_key_id
-RAZORPAY_KEY_SECRET=your_razorpay_key_secret
 KUNDALI_PRICE=199
 JANMARASHI_PRICE=20
 KUNDALI_PDF_API=https://debug.bharatcalendars.in:8443/api/kundali/generate-pdf
 JANMARASHI_API=https://debug.bharatcalendars.in:8443/api/janamrashi/moon-rashi
+KUNDALI_SKU=buy.kundli.short
+JANMARASHI_SKU=getrashi
 ```
 Press `Ctrl + O`, `Enter` to save, and `Ctrl + X` to exit.
 

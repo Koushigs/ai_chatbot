@@ -1,7 +1,7 @@
 
 from fastapi import FastAPI, Response, Query, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional, Tuple
@@ -31,9 +31,7 @@ import html
 import uuid
 import os
 import hashlib
-# pyrefly: ignore [missing-import]
-from razorpay import Client
-# pyrefly: ignore [missing-import]
+# Razorpay dependency removed - using direct multi-platform external payment architecture
 from dotenv import load_dotenv
 import json
 import sqlite3
@@ -475,11 +473,48 @@ def detect_tool_type_multilingual(user_query: str, ai_response: str, messages: O
     # Only evaluated when user_query has NO keywords for any tool!
     # ==========================================
     if messages:
-        # Language switch query fallback (e.g. "give me it in english", "give it me in english", "in english")
+        # 1. PRIORITY CHECK: If current query contains birth details (date, time, place),
+        # inspect conversation history (user queries and assistant responses) to see if Janmarashi or Kundali was requested!
+        current_birth_details = extract_birth_details(user_query)
+        if current_birth_details:
+            safe_print(f"🔍 Checking history for birth details context: {current_birth_details}")
+            for m in reversed(messages):
+                if isinstance(m, dict):
+                    content = str(m.get("content", "")).lower()
+                    clean_content = re.sub(r'\s*\(for context, today\'s date is.*?\)\.?', '', content, flags=re.IGNORECASE).strip()
+                    
+                    # Janmarashi check
+                    if (
+                        any(kw in clean_content for kw in JANMARASHI_KEYWORDS)
+                        or re.search(r'\bja?n+a?m+[a-z]*\s*(?:r[a-z]*sh[a-z]*|r[a-z]*s[a-z]*|sign|moon|patrika)?\b', clean_content)
+                        or "janmarashi" in clean_content
+                        or "janma rashi" in clean_content
+                        or "moon sign" in clean_content
+                    ):
+                        safe_print("✅ JANMARASHI CONFIRMED via history context + current birth details")
+                        return "janmarashi"
+
+                    # Kundali check
+                    if any(kw in clean_content for kw in KUNDALI_KEYWORDS) or "kundali" in clean_content or "kundli" in clean_content:
+                        safe_print("✅ KUNDALI CONFIRMED via history context + current birth details")
+                        return "kundali"
+
+                    # Predictive astrology check -> kundali
+                    if any(kw in clean_content for kw in PREDICTIVE_KEYWORDS):
+                        safe_print("✅ KUNDALI CONFIRMED via predictive history context + current birth details")
+                        return "kundali"
+
+                    # Generic rashi check
+                    if "rashi" in clean_content and not any(z in clean_content for z in ["aries", "taurus", "gemini", "cancer", "leo", "virgo", "libra", "scorpio", "sagittarius", "capricorn", "aquarius", "pisces", "mesh", "vrishabh", "mithun", "kark", "singh", "kanya", "tula", "vrishchik", "dhanu", "makar", "kumbh", "meen"]):
+                        safe_print("✅ JANMARASHI CONFIRMED via history rashi context + current birth details")
+                        return "janmarashi"
+
+        # 2. Language switch query fallback (ONLY when query is purely a language switch request like "in english", "give me it in english")
         is_lang_switch = bool(
             re.search(r'\b(?:give|tell|show|write|translate)\s+(?:me\s+)?(?:it\s+)?in\s+(?:english|inglesh|hindi|hindu|gujarati|gujrati|odia|kannada|tamil|telugu|malayalam|marathi|bengali)\b', normalized)
-            or re.search(r'^\s*(?:in|to)\s+(?:english|inglesh|hindi|gujarati|odia|kannada|tamil|telugu|malayalam|marathi|bengali)\b', normalized)
-            or any(phrase in normalized for phrase in ["give me it in english", "give it me in english", "give it in english", "in english", "english"])
+            or re.search(r'^\s*(?:in|to)\s+(?:english|inglesh|hindi|gujarati|odia|kannada|tamil|telugu|malayalam|marathi|bengali)\s*$', normalized)
+            or re.search(r'^\s*(?:english|inglesh|hindi|gujarati|odia|kannada|tamil|telugu|malayalam|marathi|bengali)\s*$', normalized)
+            or any(phrase in normalized for phrase in ["give me it in english", "give it me in english", "give it in english"])
         )
         if is_lang_switch:
             for m in reversed(messages[:-1] if len(messages) > 1 else messages):
@@ -501,21 +536,6 @@ def detect_tool_type_multilingual(user_query: str, ai_response: str, messages: O
                         if kw in user_content:
                             safe_print("✅ HOLIDAYS confirmed via language switch query + history context")
                             return "holidays"
-
-        current_birth_details = extract_birth_details(user_query)
-        if current_birth_details:
-            for m in reversed(messages):
-                if isinstance(m, dict) and m.get("role") == "user":
-                    user_content = str(m.get("content", "")).lower()
-                    if any(kw in user_content for kw in KUNDALI_KEYWORDS):
-                        safe_print("✅ KUNDALI CONFIRMED via history context + current birth details")
-                        return "kundali"
-                    if any(kw in user_content for kw in JANMARASHI_KEYWORDS) or re.search(r'\bja?n+a?m+[a-z]*\s*(?:r[a-z]*sh[a-z]*|r[a-z]*s[a-z]*|sign|moon|patrika)?\b', user_content) or "rashi" in user_content:
-                        safe_print("✅ JANMARASHI CONFIRMED via history context + current birth details")
-                        return "janmarashi"
-                    if any(kw in user_content for kw in PREDICTIVE_KEYWORDS):
-                        safe_print("✅ KUNDALI CONFIRMED via predictive history context + current birth details")
-                        return "kundali"
 
     safe_print(f"❌ No tool type detected")
     return None
@@ -936,13 +956,19 @@ def extract_updates_to_birth_details(current_details: Dict[str, str], user_query
     # Standalone place input (e.g. "Shikaripura" or "Shikaripura, Karnataka")
     if not is_updated and not is_lang_keyword and not match_yyyy and not match_dd and not match_time_colon and not match_time_simple:
         cleaned_text = re.sub(r'^(?:change|correct|wrong|new|my|place|city|location|is|to|in|at)\s+', '', text, flags=re.IGNORECASE).strip(' :=-')
+        noise_keywords = [
+            "calculate", "generate", "janmarashi", "janma", "janam", "kundali", "kundli",
+            "rashi", "rashee", "raasi", "horoscope", "panchang", "festival", "holiday",
+            "report", "chart", "pdf", "details", "callculate", "create", "make", "get", "show", "tell",
+            "english", "kannada", "kanada", "hindi", "tamil", "telugu", "malayalam",
+            "marathi", "gujarati", "bengali", "odia", "language", "lang", "hi", "hello"
+        ]
         if cleaned_text and len(cleaned_text) >= 2 and not is_yes_response(text) and not is_no_response(text):
-            if cleaned_text.lower() not in [
-                "english", "kannada", "kanada", "hindi", "tamil", "telugu", "malayalam",
-                "marathi", "gujarati", "bengali", "odia", "language", "lang"
-            ]:
-                updated_details["place"] = cleaned_text
-                is_updated = True
+            if not any(w in cleaned_text.lower() for w in noise_keywords):
+                norm_p = normalize_city_name(cleaned_text)
+                if norm_p:
+                    updated_details["place"] = norm_p
+                    is_updated = True
 
     return updated_details, is_updated
 
@@ -968,6 +994,27 @@ api.add_middleware(
 
 
 # =============================================
+# SKU REDIRECT ROUTES (BEFORE STATIC MOUNT)
+# =============================================
+@api.get("/static/buy.kundli.short")
+@api.get("/buy.kundli.short")
+def redirect_kundli_sku(order_id: Optional[str] = Query(None)):
+    target = "/payment/simulate?sku=buy.kundli.short"
+    if order_id:
+        target += f"&order_id={order_id}"
+    return RedirectResponse(url=target, status_code=307)
+
+
+@api.get("/static/getrashi")
+@api.get("/getrashi")
+def redirect_janmarashi_sku(order_id: Optional[str] = Query(None)):
+    target = "/payment/simulate?sku=getrashi"
+    if order_id:
+        target += f"&order_id={order_id}"
+    return RedirectResponse(url=target, status_code=307)
+
+
+# =============================================
 # MOUNT STATIC FILES
 # =============================================
 if os.path.exists("static"):
@@ -987,31 +1034,18 @@ def serve_chat_tester():
 
 
 # =============================================
-# RAZORPAY CONFIGURATION
+# MULTI-PLATFORM PAYMENT CONFIGURATION
 # =============================================
-RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
-RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
-
+KUNDALI_SKU = os.getenv("KUNDALI_SKU", "buy.kundli.short")
+JANMARASHI_SKU = os.getenv("JANMARASHI_SKU", "getrashi")
 
 safe_print("\n" + "="*70)
-safe_print("🔐 RAZORPAY CONFIGURATION CHECK")
+safe_print("🔐 MULTI-PLATFORM EXTERNAL PAYMENT CONFIGURATION")
 safe_print("="*70)
-if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET:
-    safe_print("❌ ERROR: Razorpay keys NOT FOUND!")
-    safe_print(f"   RAZORPAY_KEY_ID: {RAZORPAY_KEY_ID}")
-    safe_print(f"   RAZORPAY_KEY_SECRET: {RAZORPAY_KEY_SECRET}")
-    safe_print("\n✅ FIX: Create .env file in same folder as main.py with:")
-    safe_print("   RAZORPAY_KEY_ID=your_key_here")
-    safe_print("   RAZORPAY_KEY_SECRET=your_secret_here")
-    safe_print("="*70)
-else:
-    safe_print("✅ Razorpay keys loaded successfully!")
-    safe_print(f"✅ KEY ID: {RAZORPAY_KEY_ID[:20]}...")
-    safe_print(f"✅ KEY SECRET: {'*' * 15}...")
-    safe_print("="*70 + "\n")
-
-
-razorpay_client = Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+safe_print(f"   Kundali SKU (Android/iOS): {KUNDALI_SKU}")
+safe_print(f"   Janmarashi SKU (Android/iOS): {JANMARASHI_SKU}")
+safe_print(f"   Default Platform: Android (Google Pay)")
+safe_print("="*70 + "\n")
 
 
 # ✅ LANGUAGE DISPLAY NAMES
@@ -1394,15 +1428,19 @@ def safe_log_chat_turn(
 class QueryRequest(BaseModel):
     messages: List[Dict[str, Any]]
     user_id: Optional[str] = None
+    conversation_hash: Optional[str] = None
 
 
 class PaymentVerifyRequest(BaseModel):
     order_id: str
-    razorpay_payment_id: str
-    razorpay_signature: str
-    date: str
-    time: str
-    place: str
+    payment_id: Optional[str] = None
+    payment_status: Optional[str] = None
+    purchase_token: Optional[str] = None
+    razorpay_payment_id: Optional[str] = None
+    razorpay_signature: Optional[str] = None
+    date: Optional[str] = None
+    time: Optional[str] = None
+    place: Optional[str] = None
     product_type: Optional[str] = "kundali"
     lang: Optional[str] = "en"
     user_id: Optional[str] = None
@@ -1496,36 +1534,21 @@ def sanitize_predictive_response(text: str) -> str:
     return result
 
 
-def create_razorpay_order(product_type: str, birth_details: Dict[str, str]) -> Optional[Dict]:
-    """Create Razorpay order"""
-    safe_print(f"\n💳 === RAZORPAY ORDER CREATION ===")
-    safe_print(f"Product Type: {product_type}")
-    safe_print(f"Birth Details: {birth_details}")
-    
-    if product_type == "janmarashi":
-        amount = JANMARASHI_PRICE * 100
-        safe_print(f"💰 Price: ₹{JANMARASHI_PRICE} (Janmarashi)")
-    else:
-        amount = KUNDALI_PRICE * 100
-        safe_print(f"💰 Price: ₹{KUNDALI_PRICE} (Kundali)")
-    
-    try:
-        order_data = {
-            "amount": amount,
-            "currency": "INR",
-            "receipt": f"{product_type}_{uuid.uuid4().hex[:8]}",
-            "notes": {
-                "type": product_type,
-                "birth_details": birth_details
-            }
-        }
-        
-        order = razorpay_client.order.create(data=order_data)
-        safe_print(f"✅ Razorpay Order Created: {order['id']}")
-        return order
-    except Exception as e:
-        safe_print(f"❌ Razorpay Error: {type(e).__name__}: {str(e)}")
-        return None
+def create_internal_order(product_type: str, birth_details: Dict[str, str]) -> Dict[str, Any]:
+    """Create local Order ID without Razorpay external cloud dependency"""
+    order_id = f"ord_{int(time.time())}_{uuid.uuid4().hex[:6]}"
+    amount = JANMARASHI_PRICE if product_type == "janmarashi" else KUNDALI_PRICE
+    safe_print(f"\n💳 === INTERNAL ORDER CREATION ===")
+    safe_print(f"Product Type: {product_type} | Order ID: {order_id} | Amount: ₹{amount}")
+    return {
+        "id": order_id,
+        "amount": amount * 100,
+        "currency": "INR",
+        "product_type": product_type
+    }
+
+# Alias for backward compatibility
+create_razorpay_order = create_internal_order
 
 
 def call_janmarashi_api(date: str, time: str, place: str, lang: str = "en") -> Optional[Dict]:
@@ -1567,6 +1590,230 @@ def home():
     return HTMLResponse(content="<h1>Bharat Calendar AI API is running!</h1>", status_code=200)
 
 
+@api.get("/getrashi", response_class=HTMLResponse)
+@api.get("/buy.kundli.short", response_class=HTMLResponse)
+@api.get("/static/getrashi", response_class=HTMLResponse)
+@api.get("/static/buy.kundli.short", response_class=HTMLResponse)
+@api.get("/payment/simulate", response_class=HTMLResponse)
+def payment_simulator_page(
+    order_id: Optional[str] = Query(None),
+    sku: Optional[str] = Query(None),
+    product_type: Optional[str] = Query(None)
+):
+    """Simulated external payment gateway page for testing mobile SKUs in laptop browser"""
+    target_order_id = order_id or ""
+    prod_type = product_type or ""
+    birth_data = {}
+
+    with get_db() as conn:
+        if target_order_id:
+            cursor = conn.execute("SELECT order_id, product_type, data_json, status FROM payments WHERE order_id = ?", (target_order_id,))
+            row = cursor.fetchone()
+        else:
+            cursor = conn.execute("SELECT order_id, product_type, data_json, status FROM payments WHERE status = 'pending' ORDER BY created_at DESC LIMIT 1")
+            row = cursor.fetchone()
+
+        if row:
+            target_order_id = row["order_id"]
+            prod_type = prod_type or row["product_type"]
+            try:
+                birth_data = json.loads(row["data_json"]) if row["data_json"] else {}
+            except Exception:
+                birth_data = {}
+
+    if not prod_type:
+        if sku and "rashi" in sku.lower():
+            prod_type = "janmarashi"
+        else:
+            prod_type = "kundali"
+
+    display_title = "Janmarashi (Moon Sign)" if prod_type == "janmarashi" else "Kundali PDF Report"
+    amount = "₹20" if prod_type == "janmarashi" else "₹199"
+    sku_val = sku or ("getrashi" if prod_type == "janmarashi" else "buy.kundli.short")
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Payment Simulator - {display_title}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: #0f172a;
+            color: #f8fafc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }}
+        .card {{
+            background: #1e293b;
+            border-radius: 16px;
+            padding: 32px;
+            max-width: 460px;
+            width: 100%;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border: 1px solid #334155;
+            text-align: center;
+        }}
+        .badge {{
+            display: inline-block;
+            padding: 5px 14px;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 16px;
+            background: rgba(34, 197, 94, 0.15);
+            color: #4ade80;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }}
+        h2 {{ margin: 0 0 8px 0; font-size: 22px; color: #f8fafc; }}
+        .sku-box {{ margin: 12px 0 20px 0; font-size: 13px; color: #94a3b8; }}
+        .sku-code {{ background: #0f172a; padding: 4px 10px; border-radius: 6px; color: #38bdf8; font-family: monospace; font-size: 14px; }}
+        .price {{ font-size: 36px; font-weight: 800; color: #4ade80; margin: 16px 0; }}
+        .details-box {{
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 16px;
+            margin: 20px 0;
+            text-align: left;
+            font-size: 14px;
+        }}
+        .detail-row {{ display: flex; justify-content: space-between; margin-bottom: 8px; color: #94a3b8; }}
+        .detail-row:last-child {{ margin-bottom: 0; }}
+        .detail-row strong {{ color: #f8fafc; }}
+        .btn {{
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 10px;
+        }}
+        .btn-pay {{ background: #22c55e; color: #052e16; }}
+        .btn-pay:hover {{ background: #16a34a; color: #fff; }}
+        .result-box {{
+            display: none;
+            margin-top: 20px;
+            padding: 18px;
+            border-radius: 10px;
+            font-size: 14px;
+            text-align: left;
+        }}
+        .result-success {{ background: rgba(34, 197, 94, 0.15); border: 1px solid #22c55e; color: #4ade80; }}
+        .download-btn {{
+            display: inline-block;
+            margin-top: 12px;
+            padding: 10px 18px;
+            background: #38bdf8;
+            color: #0f172a;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: bold;
+        }}
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="badge">Google Pay / In-App Purchase Simulator</div>
+        <h2>{display_title}</h2>
+        <div class="sku-box">SKU: <span class="sku-code">{sku_val}</span></div>
+        <div class="price">{amount}</div>
+
+        <div class="details-box">
+            <div class="detail-row"><span>Order ID:</span> <strong id="lblOrderId">{target_order_id or "Pending Order"}</strong></div>
+            <div class="detail-row"><span>Birth Date:</span> <strong>{birth_data.get('date', 'N/A')}</strong></div>
+            <div class="detail-row"><span>Birth Time:</span> <strong>{birth_data.get('time', 'N/A')}</strong></div>
+            <div class="detail-row"><span>Birth Place:</span> <strong>{birth_data.get('place', 'N/A')}</strong></div>
+        </div>
+
+        <button id="btnPay" class="btn btn-pay" onclick="payNow()">✅ Pay {amount} (Simulate Success)</button>
+
+        <div id="resultBox" class="result-box"></div>
+    </div>
+
+    <script>
+        const orderId = "{target_order_id}";
+        const productType = "{prod_type}";
+
+        async function payNow() {{
+            const btn = document.getElementById("btnPay");
+            const resBox = document.getElementById("resultBox");
+            btn.disabled = true;
+            btn.innerHTML = "⏳ Processing Payment & Calling Server...";
+
+            try {{
+                const res = await fetch("/payment/status", {{
+                    method: "POST",
+                    headers: {{ "Content-Type": "application/json" }},
+                    body: JSON.stringify({{
+                        order_id: orderId,
+                        payment_status: "completed",
+                        payment_id: "GPA.SIM-" + Date.now(),
+                        product_type: productType
+                    }})
+                }});
+
+                const data = await res.json();
+                console.log("Payment response:", data);
+
+                if (data.success) {{
+                    btn.style.display = "none";
+                    resBox.className = "result-box result-success";
+                    resBox.style.display = "block";
+
+                    let html = "<div style='font-weight:bold; font-size:16px; margin-bottom:8px;'>🎉 Payment Verified Successfully!</div>";
+                    
+                    if (productType === "janmarashi") {{
+                        const d = data.data || {{}};
+                        html += "<div><strong>Moon Sign (Rashi):</strong> " + (d.rashi || "Calculated") + "</div>";
+                        html += "<div><strong>Moon Longitude:</strong> " + (d.moonLongitude || "-") + "</div>";
+                    }} else {{
+                        const dl = data.download_url || (data.data && data.data.download_url);
+                        if (dl) {{
+                            html += "<div>Your Kundali PDF is ready!</div>";
+                            html += "<a href='" + dl + "' class='download-btn' target='_blank'>📥 Download Kundali PDF</a>";
+                        }} else {{
+                            html += "<div>Kundali generated successfully!</div>";
+                        }}
+                    }}
+
+                    resBox.innerHTML = html;
+
+                    // Sync with chat window if open
+                    localStorage.setItem("paymentCompleted", JSON.stringify({{
+                        product_type: productType,
+                        order_id: orderId,
+                        result: data
+                    }}));
+                }} else {{
+                    btn.disabled = false;
+                    btn.innerHTML = "Retry Payment";
+                    alert("Payment failed: " + (data.message || "Unknown error"));
+                }}
+            }} catch (err) {{
+                btn.disabled = false;
+                btn.innerHTML = "Retry Payment";
+                alert("Error: " + err.message);
+            }}
+        }}
+    </script>
+</body>
+</html>
+"""
+    return HTMLResponse(content=html, status_code=200)
+
+
 
 
 
@@ -1582,8 +1829,13 @@ def invoke_agent(request: QueryRequest, http_request: Request):
     
     user_id = request.user_id
     current_messages = request.messages.copy()
+    
+    # Clean up trailing assistant messages if client echoed back history ending with an assistant message
+    while current_messages and current_messages[-1].get("role") == "assistant":
+        current_messages.pop()
+        
     original_user_query = current_messages[-1]["content"] if current_messages else ""
-    conversation_hash = get_conversation_hash(current_messages)
+    conversation_hash = (request.conversation_hash.strip() if request.conversation_hash else "") or get_conversation_hash(current_messages)
 
     all_pending = get_all_pending_requests()
 
@@ -1600,44 +1852,82 @@ def invoke_agent(request: QueryRequest, http_request: Request):
     # 🔒 STRICT PAYMENT GATEKEEPER - NO LLM BYPASS ALLOWED!
     # =========================================================
     pending_data = get_pending_request(user_id=user_id, conversation_hash=conversation_hash)
+
+    # If user starts a fresh tool request or this is the start of a conversation, clear any old stale pending request
+    user_msgs = [m for m in current_messages if isinstance(m, dict) and m.get("role") == "user"]
+    is_fresh_tool_request = (
+        len(user_msgs) <= 1
+        or any(kw in user_response_lower for kw in JANMARASHI_KEYWORDS)
+        or any(kw in user_response_lower for kw in KUNDALI_KEYWORDS)
+        or any(kw in user_response_lower for kw in PANCHANG_KEYWORDS)
+        or any(kw in user_response_lower for kw in FESTIVAL_KEYWORDS)
+        or any(kw in user_response_lower for kw in HOLIDAYS_KEYWORDS)
+        or any(user_response_lower.startswith(w) for w in ["calculate", "generate", "show", "tell", "make", "create", "what", "aaj"])
+    )
+
+    if pending_data and is_fresh_tool_request and not is_yes_response(user_response_lower) and not is_no_response(user_response_lower):
+        safe_print(f"🧹 Stale pending payment cleared for new query: '{original_user_query}'")
+        delete_pending_request(user_id=user_id, conversation_hash=conversation_hash)
+        pending_data = None
+    
+    # If no pending_data exists in DB, but user query is "yes" and history contains birth details, recover pending_data
+    if not pending_data and is_yes_response(user_response_lower):
+        hist_details = extract_birth_details_from_history(current_messages)
+        if hist_details:
+            full_hist_text = " ".join(m.get("content", "").lower() for m in current_messages)
+            recovered_product = "janmarashi" if any(k in full_hist_text for k in ["rashi", "janma"]) else "kundali"
+            pending_data = {
+                "product_type": recovered_product,
+                "birth_details": hist_details,
+                "conversation_hash": conversation_hash,
+                "user_id": user_id
+            }
+            safe_print(f"🔄 Recovered pending payment state from conversation history: product={recovered_product}")
+
+    # If user explicitly cancels (e.g. 'cancel', 'no', 'nahi'), cancel pending state and orders immediately
+    if is_no_response(user_response_lower):
+        safe_print(f"❌ USER CANCELLED PAYMENT (Query: '{original_user_query}')")
+        delete_pending_request(user_id=user_id, conversation_hash=conversation_hash)
+        with get_db() as conn:
+            conn.execute("UPDATE payments SET status = 'cancelled' WHERE status = 'pending'")
+            conn.commit()
+            
+        cancel_response = "✅ Kundali / Janmarashi generation and payment have been cancelled. Let me know if you need anything else!"
+        complete_chat = current_messages + [{"role": "assistant", "content": cancel_response}]
+        try:
+            safe_log_chat_turn(
+                ts=datetime.now().isoformat(),
+                user_id=user_id,
+                conversation_hash=conversation_hash,
+                query_text=original_user_query,
+                detected_language=extract_language(original_user_query),
+                tool_type="cancel",
+                llm_latency_ms=int((time.time() - t_start) * 1000),
+                fallback_used=False,
+                products_shown=[],
+                upsell_shown=0,
+                eligibility_score=0.0,
+                eligibility_reason="User cancelled"
+            )
+        except Exception as e:
+            safe_print(f"⚠️ Analytics logging error: {e}")
+
+        return {
+            "messages": complete_chat,
+            "recommendations": {},
+            "links": {},
+            "parsed_data": {
+                "status": "cancelled",
+                "payment_status": "cancelled"
+            },
+            "tool_detected": None,
+            "has_recommendations": False,
+            "is_specific_query": False
+        }
+
     if pending_data:
         pending_key = user_id if user_id else conversation_hash
         safe_print(f"\n🔒 PENDING PAYMENT DETECTED FOR SESSION: {pending_key}")
-        
-        # 1. User explicitly cancelled
-        if is_no_response(user_response_lower):
-            safe_print(f"❌ USER CANCELLED PAYMENT")
-            product_type = pending_data.get("product_type", "kundali")
-            delete_pending_request(user_id=user_id, conversation_hash=conversation_hash)
-            
-            cancel_response = f"✅ {product_type.capitalize()} generation cancelled. Let me know if you change your mind!"
-            complete_chat = current_messages + [{"role": "assistant", "content": cancel_response}]
-            try:
-                safe_log_chat_turn(
-                    ts=datetime.now().isoformat(),
-                    user_id=user_id,
-                    conversation_hash=conversation_hash,
-                    query_text=original_user_query,
-                    detected_language=extract_language(original_user_query),
-                    tool_type=product_type,
-                    llm_latency_ms=int((time.time() - t_start) * 1000),
-                    fallback_used=False,
-                    products_shown=[],
-                    upsell_shown=0,
-                    eligibility_score=0.0,
-                    eligibility_reason="Pending payment cancellation"
-                )
-            except Exception as e:
-                safe_print(f"⚠️ Analytics logging error: {e}")
-            return {
-                "messages": complete_chat,
-                "recommendations": {},
-                "links": {},
-                "parsed_data": {},
-                "tool_detected": None,
-                "has_recommendations": False,
-                "is_specific_query": False
-            }
             
         # 2. For ANY other message while payment is pending (e.g. 'ya', 'yes', 'yup', 'sure', 'how to pay'):
         # Generate the Razorpay Order & Payment Link!
@@ -1713,128 +2003,122 @@ def invoke_agent(request: QueryRequest, http_request: Request):
             safe_print(f"Product Type: {product_type}")
             safe_print(f"Birth Details: {birth_details}")
             
-            razorpay_order = create_razorpay_order(product_type, birth_details)
+            order_obj = create_internal_order(product_type, birth_details)
+            order_id = order_obj['id']
             
-            if razorpay_order:
-                order_id = razorpay_order['id']
-                
-                if product_type == "janmarashi":
-                    amount = JANMARASHI_PRICE
-                    product_display = "Janmarashi (Moon Sign)"
-                else:
-                    amount = KUNDALI_PRICE
-                    product_display = "Kundali PDF"
-                
-                base_url = get_base_url(http_request)
-                payment_link = f"{base_url}/static/payments.html?order_id={order_id}&key_id={RAZORPAY_KEY_ID}&product_type={product_type}&amount={amount}&date={quote(birth_details['date'])}&time={quote(birth_details['time'])}&place={quote(birth_details['place'])}&lang={quote(birth_details.get('lang', 'en'))}"
-                if user_id:
-                    payment_link += f"&user_id={quote(user_id)}"
-                
-                lang_display = LANG_DISPLAY_NAMES.get(birth_details.get('lang', 'en').lower(), 'English')
-                content_lines = [
-                    "🎉 PAYMENT LINK GENERATED 🎉",
-                    "",
-                    f"💳 Product: {product_display}",
-                    f"💰 Amount: ₹{amount}",
-                    "",
-                    "📱 SECURE RAZORPAY PAYMENT PAGE:",
-                    "",
-                    "Click the link below to complete payment:",
-                    f"   {payment_link}",
-                    "",
-                    "📋 Your Birth Details:",
-                    f"   Date: {birth_details['date']}",
-                    f"   Time: {birth_details['time']}",
-                    f"   Place: {birth_details['place']}",
-                    f"   Language: {lang_display}",
-                    "",
-                    f"📍 Order ID: {order_id}",
-                    "",
-                    "Payment Options:",
-                    "✅ UPI (Recommended)",
-                    "✅ Debit/Credit Card",
-                    "✅ Net Banking",
-                    "✅ Wallets (Paytm, PhonePe, Google Pay)"
-                ]
-                
-                complete_chat = current_messages + [
-                    {"role": "assistant", "content": "\n".join(content_lines)}
-                ]
-                
-                # ✅ Clear pending payment request so subsequent queries (e.g. "todays panchang") aren't intercepted!
-                delete_pending_request(user_id=user_id, conversation_hash=conversation_hash)
-                
-                try:
-                    safe_log_chat_turn(
-                        ts=datetime.now().isoformat(),
-                        user_id=user_id,
-                        conversation_hash=conversation_hash,
-                        query_text=original_user_query,
-                        detected_language=extract_language(original_user_query),
-                        tool_type=product_type,
-                        llm_latency_ms=int((time.time() - t_start) * 1000),
-                        fallback_used=False,
-                        products_shown=[],
-                        upsell_shown="razorpay_payment",
-                        eligibility_score=0.0,
-                        eligibility_reason="Razorpay payment link generated"
-                    )
-                except Exception as e:
-                    safe_print(f"⚠️ Analytics logging error: {e}")
-                return {
-                    "messages": complete_chat,
-                    "recommendations": {},
-                    "links": {
-                        "payment_link": {
-                            "title": f"💳 Pay ₹{amount} - Get {product_display}",
-                            "url": payment_link,
-                            "order_id": order_id,
-                            "type": "razorpay_payment",
-                            "product_type": product_type
-                        }
-                    },
-                    "parsed_data": {
-                        "payment_status": "pending",
-                        "order_id": order_id,
-                        "amount": f"₹{amount}",
-                        "product_type": product_type,
-                        "birth_details": birth_details
-                    },
-                    "tool_detected": product_type,
-                    "has_recommendations": False,
-                    "is_specific_query": True
-                }
+            if product_type == "janmarashi":
+                amount = JANMARASHI_PRICE
+                product_display = "Janmarashi (Moon Sign)"
+                payment_url = JANMARASHI_SKU
             else:
-                safe_print("❌ Razorpay order creation failed!")
-                delete_pending_request(user_id=user_id, conversation_hash=conversation_hash)
-                error_msg = "❌ Could not create Razorpay order. Please ensure your `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` in `.env` match correctly and the server has been restarted."
-                complete_chat = current_messages + [{"role": "assistant", "content": error_msg}]
-                try:
-                    safe_log_chat_turn(
-                        ts=datetime.now().isoformat(),
-                        user_id=user_id,
-                        conversation_hash=conversation_hash,
-                        query_text=original_user_query,
-                        detected_language=extract_language(original_user_query),
-                        tool_type=product_type,
-                        llm_latency_ms=int((time.time() - t_start) * 1000),
-                        fallback_used=False,
-                        products_shown=[],
-                        upsell_shown=0,
-                        eligibility_score=0.0,
-                        eligibility_reason="Razorpay order creation failed"
-                    )
-                except Exception as e:
-                    safe_print(f"⚠️ Analytics logging error: {e}")
-                return {
-                    "messages": complete_chat,
-                    "recommendations": {},
-                    "links": {},
-                    "parsed_data": {"error": "Razorpay order creation failed"},
-                    "tool_detected": None,
-                    "has_recommendations": False,
-                    "is_specific_query": False
-                }
+                amount = KUNDALI_PRICE
+                product_display = "Kundali PDF"
+                payment_url = KUNDALI_SKU
+            
+            # Detect platform from X-Platform header, default to 'android'
+            raw_platform = http_request.headers.get("x-platform", "").lower().strip() if http_request else ""
+            if raw_platform in ["android", "ios", "web"]:
+                platform = raw_platform
+            else:
+                platform = "android"  # Default as requested
+            
+            if platform == "ios":
+                payment_type = "apple_payment"
+            elif platform == "web":
+                payment_type = "web_payment"
+            else:
+                payment_type = "google_payment"
+            
+            # Pre-save pending payment into SQLite payments table
+            pay_data = {
+                "date": birth_details['date'],
+                "time": birth_details['time'],
+                "place": birth_details['place'],
+                "lang": birth_details.get('lang', 'en'),
+                "amount": amount,
+                "product_type": product_type,
+                "payment_url": payment_url,
+                "payment_type": payment_type,
+                "platform": platform,
+                "payment_status": "pending"
+            }
+            save_payment(
+                order_id=order_id,
+                payment_id=f"pending_{order_id}",
+                user_id=user_id,
+                product_type=product_type,
+                status="pending",
+                data=pay_data
+            )
+            
+            lang_display = LANG_DISPLAY_NAMES.get(birth_details.get('lang', 'en').lower(), 'English')
+            content_lines = [
+                "🎉 PAYMENT LINK GENERATED 🎉",
+                "",
+                f"💳 Product: {product_display}",
+                f"💰 Amount: ₹{amount}",
+                # f"🛒 SKU: {payment_url}",
+                f"📱 Payment Type: {payment_type}",
+                f"📍 Order ID: {order_id}",
+                "",
+                "📋 Your Birth Details:",
+                f"   Date: {birth_details['date']}",
+                f"   Time: {birth_details['time']}",
+                f"   Place: {birth_details['place']}",
+                f"   Language: {lang_display}",
+                "",
+                "Please continue the payment using Apple/Google Play Purchase to get your result."
+            ]
+            
+            complete_chat = current_messages + [
+                {"role": "assistant", "content": "\n".join(content_lines)}
+            ]
+            
+            # ✅ Clear pending payment request session
+            delete_pending_request(user_id=user_id, conversation_hash=conversation_hash)
+            
+            try:
+                safe_log_chat_turn(
+                    ts=datetime.now().isoformat(),
+                    user_id=user_id,
+                    conversation_hash=conversation_hash,
+                    query_text=original_user_query,
+                    detected_language=extract_language(original_user_query),
+                    tool_type=product_type,
+                    llm_latency_ms=int((time.time() - t_start) * 1000),
+                    fallback_used=False,
+                    products_shown=[],
+                    upsell_shown=payment_type,
+                    eligibility_score=0.0,
+                    eligibility_reason=f"{payment_type} generated"
+                )
+            except Exception as e:
+                safe_print(f"⚠️ Analytics logging error: {e}")
+            return {
+                "messages": complete_chat,
+                "recommendations": {},
+                "links": {
+                    "payment_link": {
+                        "title": f"💳 Pay ₹{amount} - Get {product_display}",
+                        "url": payment_url,
+                        "order_id": order_id,
+                        "type": payment_type,
+                        "product_type": product_type,
+                        "platform": platform
+                    }
+                },
+                "parsed_data": {
+                    "payment_status": "pending",
+                    "order_id": order_id,
+                    "amount": f"₹{amount}",
+                    "product_type": product_type,
+                    "birth_details": birth_details,
+                    "platform": platform
+                },
+                "tool_detected": product_type,
+                "has_recommendations": False,
+                "is_specific_query": True
+            }
 
         # 4. If query is neither Yes, No, nor an Update (e.g. user asked "todays panchang" while pending)
         safe_print(f"ℹ️ Clearing pending payment request because user asked new query: '{original_user_query}'")
@@ -2388,9 +2672,32 @@ def get_payment_status(order_id: str = Query(...)):
     
     payment_data = get_payment(order_id)
     if payment_data:
-        safe_print(f"✅ PAYMENT FOUND IN STORAGE: {order_id}")
+        status = payment_data.get("status", "pending")
+        safe_print(f"📊 Payment status for {order_id}: {status}")
         
-        status = payment_data.get("status", "delivered")
+        # If order was cancelled or failed
+        if status in ["cancelled", "canceled", "failed"]:
+            return {
+                "success": False,
+                "payment_completed": False,
+                "payment_status": status,
+                "status": status,
+                "order_id": order_id,
+                "product_type": payment_data.get("product_type"),
+                "message": f"Payment was {status}."
+            }
+
+        # If order is still pending, it has NOT been completed
+        if status == "pending":
+            return {
+                "success": False,
+                "payment_completed": False,
+                "payment_status": "pending",
+                "status": "pending",
+                "order_id": order_id,
+                "product_type": payment_data.get("product_type"),
+                "message": "Payment has not been completed yet."
+            }
         
         if status == "pending_delivery" and payment_data.get("product_type") == "janmarashi":
             safe_print(f"🔄 Retrying real Janmarashi API for pending order: {order_id}")
@@ -2442,14 +2749,16 @@ def get_payment_status(order_id: str = Query(...)):
                     "message": "Payment received! Your Janma Rashi is being calculated — check back in a few minutes."
                 }
         
-        return {
-            "success": True,
-            "payment_completed": True,
-            "status": status,
-            "order_id": order_id,
-            "product_type": payment_data.get("product_type"),
-            "data": payment_data.get("data")
-        }
+        # Order is completed / delivered
+        if status in ["delivered", "completed"]:
+            return {
+                "success": True,
+                "payment_completed": True,
+                "status": "delivered",
+                "order_id": order_id,
+                "product_type": payment_data.get("product_type"),
+                "data": payment_data.get("data")
+            }
     
     safe_print(f"⏳ PAYMENT NOT YET COMPLETED: {order_id}")
     
@@ -2462,61 +2771,84 @@ def get_payment_status(order_id: str = Query(...)):
 
 
 # =============================================
-# PAYMENT VERIFICATION ENDPOINT
+# PAYMENT VERIFICATION & STATUS ENDPOINTS
 # =============================================
 
+@api.post("/payment/status")
 @api.post("/payment/verify")
-def verify_payment(request: PaymentVerifyRequest, http_request: Request):
-    """Verify Razorpay payment"""
-    
-    safe_print(f"\n{'='*70}")
-    safe_print("💳 PAYMENT VERIFICATION STARTED")
-    safe_print(f"{'='*70}")
+def verify_or_update_payment(request: PaymentVerifyRequest, http_request: Request):
+    """Unified endpoint to check or update payment status via POST"""
     
     order_id = request.order_id
-    payment_id = request.razorpay_payment_id
-    signature = request.razorpay_signature
-    date = request.date
-    time = request.time
-    place = request.place
-    product_type = request.product_type or "kundali"
-    user_id = request.user_id
+    safe_print(f"\n{'='*70}")
+    safe_print(f"💳 PAYMENT STATUS/VERIFICATION: {order_id}")
+    safe_print(f"{'='*70}")
     
-    safe_print(f"Order ID: {order_id}")
-    safe_print(f"Payment ID: {payment_id}")
-    safe_print(f"User ID: {user_id}")
-    safe_print(f"Product Type: {product_type}")
-    safe_print(f"Birth Details: Date={date}, Time={time}, Place={place}")
+    payment_data = get_payment(order_id)
+    stored_data = payment_data.get("data", {}) if payment_data else {}
+    
+    # 1. Check if the payment explicitly failed or was cancelled
+    req_status = (request.payment_status or "").lower().strip()
+    if req_status in ["failed", "cancelled", "canceled", "declined"]:
+        safe_print(f"❌ Order {order_id} marked as {req_status}")
+        update_payment_status(order_id, status=req_status)
+        return {
+            "success": False,
+            "payment_status": req_status,
+            "status": req_status,
+            "order_id": order_id,
+            "message": f"Payment was {req_status}. No charges were made."
+        }
+
+    # 2. Determine if this request is a payment confirmation or status check
+    is_confirmation = False
+    if req_status in ["completed", "success", "paid"]:
+        is_confirmation = True
+    elif request.payment_id or request.purchase_token or request.razorpay_payment_id:
+        is_confirmation = True
+    
+    # CASE A: Status Check only (Payment still pending or already completed)
+    if not is_confirmation:
+        if payment_data and payment_data.get("status") in ["delivered", "completed"]:
+            safe_print(f"✅ Order {order_id} already completed!")
+            return {
+                "success": True,
+                "payment_status": "completed",
+                "status": "delivered",
+                "order_id": order_id,
+                "product_type": payment_data.get("product_type"),
+                "download_url": stored_data.get("download_url"),
+                "data": stored_data
+            }
+        else:
+            safe_print(f"⏳ Order {order_id} is pending payment")
+            return {
+                "success": True,
+                "payment_status": "pending",
+                "status": "pending",
+                "order_id": order_id,
+                "message": "Payment has not been completed yet."
+            }
+    
+    # CASE B: Confirm Payment and Deliver Product
+    safe_print(f"🎯 CONFIRMING PAYMENT FOR ORDER: {order_id}")
+    
+    # Merge birth details from request or stored data
+    date = request.date or stored_data.get("date", "")
+    birth_time = request.time or stored_data.get("time", "")
+    place = request.place or stored_data.get("place", "")
+    lang = (request.lang or stored_data.get("lang", "en") or "en").lower()
+    product_type = request.product_type or (payment_data.get("product_type") if payment_data else None) or "kundali"
+    payment_id = request.payment_id or request.razorpay_payment_id or f"pay_{order_id}"
+    user_id = request.user_id or (payment_data.get("user_id") if payment_data else None)
     
     try:
-        safe_print(f"\n🔐 Verifying payment signature...")
-        
-        try:
-            razorpay_client.utility.verify_payment_signature({
-                'razorpay_order_id': order_id,
-                'razorpay_payment_id': payment_id,
-                'razorpay_signature': signature
-            })
-            safe_print(f"✅ Signature verified successfully!")
-        except Exception as sig_error:
-            safe_print(f"❌ SIGNATURE VERIFICATION FAILED!")
-            return {
-                "success": False,
-                "error_type": "signature_verification_failed",
-                "message": "Payment verification failed: Signature mismatch"
-            }
-        
-        if not user_id:
-            pending_req = get_pending_request(user_id=None, conversation_hash=None)
-            if pending_req and pending_req.get("user_id"):
-                user_id = pending_req["user_id"]
-
         if product_type == "janmarashi":
             safe_print(f"\n📊 Preparing Janmarashi data...")
             lang = getattr(request, 'lang', 'en') or 'en'
             
             try:
-                janmarashi_data = call_janmarashi_api(date, time, place, lang)
+                janmarashi_data = call_janmarashi_api(date, birth_time, place, lang)
                 
                 if janmarashi_data:
                     rashi = janmarashi_data["moonRashi"]
@@ -2535,7 +2867,7 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
                         "latitude": lat,
                         "longitude": lon,
                         "date": date,
-                        "time": time,
+                        "time": birth_time,
                         "place": place,
                         "lang": lang
                     }
@@ -2551,18 +2883,19 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
                     
                     return {
                         "success": True,
+                        "payment_status": "completed",
+                        "status": "delivered",
                         "message": "Payment verified successfully!",
                         "product_type": "janmarashi",
                         "payment_id": payment_id,
                         "order_id": order_id,
-                        "status": "delivered",
                         "data": {
                             "rashi": rashi,
                             "moonLongitude": longitude,
                             "latitude": lat,
                             "longitude": lon,
                             "date": date,
-                            "time": time,
+                            "time": birth_time,
                             "place": place
                         }
                     }
@@ -2570,7 +2903,7 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
                     safe_print("⏳ Janmarashi API call failed. Storing order as pending_delivery.")
                     pay_data = {
                         "date": date,
-                        "time": time,
+                        "time": birth_time,
                         "place": place,
                         "lang": lang
                     }
@@ -2587,6 +2920,7 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
                         "success": True,
                         "delivery": "pending",
                         "status": "pending_delivery",
+                        "payment_status": "pending_delivery",
                         "message": "Payment received! Your Janma Rashi is being calculated — check back in a few minutes.",
                         "product_type": "janmarashi",
                         "payment_id": payment_id,
@@ -2596,7 +2930,7 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
                 safe_print(f"⚠️ Janmarashi API exception ({api_error}). Storing order as pending_delivery.")
                 pay_data = {
                     "date": date,
-                    "time": time,
+                    "time": birth_time,
                     "place": place,
                     "lang": lang
                 }
@@ -2613,6 +2947,7 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
                     "success": True,
                     "delivery": "pending",
                     "status": "pending_delivery",
+                    "payment_status": "pending_delivery",
                     "message": "Payment received! Your Janma Rashi is being calculated — check back in a few minutes.",
                     "product_type": "janmarashi",
                     "payment_id": payment_id,
@@ -2623,7 +2958,7 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
             print(f"\n📄 Generating Kundali PDF...")
             
             lang = (getattr(request, 'lang', 'en') or "en").lower()
-            formatted_time = format_time_for_api(time)
+            formatted_time = format_time_for_api(birth_time)
             pdf_payload = {"date": date, "time": formatted_time, "place": place, "lang": lang}
             
             try:
@@ -2641,7 +2976,7 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
                     print(f"❌ PDF API Error Details: {pdf_response.text}")
                     pay_data = {
                         "date": date,
-                        "time": time,
+                        "time": birth_time,
                         "place": place,
                         "lang": lang
                     }
@@ -2675,14 +3010,15 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
                     print(f"⚠️ Note: Local temp PDF save skipped ({save_err})")
                 
                 base_url = get_base_url(http_request)
-                download_url = f"{base_url}/kundali/download?date={quote(date)}&time={quote(time)}&place={quote(place)}&payment_id={payment_id}&lang={quote(lang)}"
+                download_url = f"{base_url}/kundali/download?date={quote(date)}&time={quote(birth_time)}&place={quote(place)}&payment_id={payment_id}&lang={quote(lang)}"
                 
                 pay_data = {
                     "date": date,
-                    "time": time,
+                    "time": birth_time,
                     "place": place,
                     "lang": lang,
-                    "download_url": download_url
+                    "download_url": download_url,
+                    "payment_status": "completed"
                 }
                 save_payment(
                     order_id=order_id,
@@ -2696,14 +3032,16 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
                 
                 return {
                     "success": True,
+                    "payment_status": "completed",
+                    "status": "delivered",
                     "message": "Payment verified successfully!",
                     "product_type": "kundali",
                     "payment_id": payment_id,
                     "order_id": order_id,
-                    "status": "delivered",
+                    "download_url": download_url,
                     "data": {
                         "date": date,
-                        "time": time,
+                        "time": birth_time,
                         "place": place,
                         "download_url": download_url
                     }
@@ -2713,7 +3051,7 @@ def verify_payment(request: PaymentVerifyRequest, http_request: Request):
                 print(f"❌ PDF API ERROR: {str(api_error)}")
                 pay_data = {
                     "date": date,
-                    "time": time,
+                    "time": birth_time,
                     "place": place,
                     "lang": lang
                 }
@@ -2768,7 +3106,7 @@ def download_kundali(
     if not payment_verified:
         safe_print(f"❌ DOWNLOAD DENIED: Payment ID {payment_id} is not verified!")
         return Response(
-            content=json.dumps({"error": "Payment verification required", "message": "Please complete Razorpay payment to download your Kundali PDF."}),
+            content=json.dumps({"error": "Payment verification required", "message": "Please complete payment to download your Kundali PDF."}),
             status_code=403,
             media_type="application/json"
         )

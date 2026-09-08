@@ -456,6 +456,14 @@
             <div class="header">
                 <h1>🌙 Bharat Calendar AI</h1>
                 <p>Your Personal Astrology Assistant</p>
+                <div style="margin-top: 10px; display: inline-flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.08); padding: 5px 14px; border-radius: 20px; font-size: 13px;">
+                    <span>📱 <strong>Platform Simulator:</strong></span>
+                    <select id="platformSelect" style="background: #1e293b; color: #ffd54f; border: 1px solid #475569; border-radius: 6px; padding: 3px 8px; font-weight: bold; cursor: pointer; outline: none;">
+                        <option value="android" selected>🤖 Android (Google Pay)</option>
+                        <option value="ios">🍏 iOS (Apple Store)</option>
+                        <option value="web">🌐 Web (Web Checkout)</option>
+                    </select>
+                </div>
             </div>
 
             <div id="chatMessages"></div>
@@ -476,6 +484,7 @@
         let currentPollingInterval = null;
         let currentProductType = null;
         let pageRefreshProtection = true;
+        let currentConversationHash = 'chat_' + Math.random().toString(36).substring(2, 10) + '_' + Date.now().toString(36);
 
         console.log('🚀 Chat page initialized - Page Refresh Protection ENABLED');
 
@@ -516,29 +525,14 @@
             }
         });
 
-        // ✅ PAGE LOAD - RESTORE SESSION OR SHOW WELCOME, AND CHECK FOR PAYMENT
+        // ✅ PAGE LOAD - SHOW WELCOME AND CLEAR STALE PAYMENT
         window.addEventListener('load', () => {
             console.log('📄 Page load event fired');
 
-            const savedHTML = sessionStorage.getItem('savedChatMessages');
-            const savedHistory = sessionStorage.getItem('savedChatHistory');
+            // Clear any stale payment data from previous sessions
+            localStorage.removeItem('paymentCompleted');
 
-            if (savedHTML) {
-                console.log('🔄 Restoring previous chat messages from session storage');
-                document.getElementById('chatMessages').innerHTML = savedHTML;
-                if (savedHistory) {
-                    try {
-                        chatHistory = JSON.parse(savedHistory);
-                    } catch (e) {
-                        console.error('Error parsing saved history:', e);
-                    }
-                }
-            } else {
-                addAssistantMessage('🌙 Welcome to Bharat Calendar AI!\n\nI can help you with:\n🌙 Janmarashi (Moon Sign)\n📊 Kundali (Birth Chart)\n🔮 Horoscope\n📅 Panchang\n✨ And much more!\n\nHow can I assist you today?');
-            }
-
-            // ✅ Check for payment data immediately
-            checkForPaymentData();
+            addAssistantMessage('🌙 Welcome to Bharat Calendar AI!\n\nI can help you with:\n🌙 Janmarashi (Moon Sign)\n📊 Kundali (Birth Chart)\n🔮 Horoscope\n📅 Panchang\n✨ And much more!\n\nHow can I assist you today?');
         });
 
         // ✅ CHECK FOR PAYMENT DATA
@@ -587,17 +581,48 @@
                 currentPollingInterval = null;
             }
 
+            // Check if user is cancelling an active payment
+            const isCancel = /^(cancel|no|stop|nahi|nahin|cancel payment|exit|close)/i.test(message.trim());
+            if (isCancel) {
+                if (currentPaymentOrderId) {
+                    fetch(`${window.location.origin}/payment/status`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            order_id: currentPaymentOrderId,
+                            payment_status: 'cancelled'
+                        })
+                    }).catch(e => console.warn(e));
+                    currentPaymentOrderId = null;
+                }
+
+                const statusDiv = document.getElementById('paymentStatus');
+                if (statusDiv) {
+                    statusDiv.className = 'payment-status cancelled';
+                    statusDiv.style.background = 'rgba(239, 68, 68, 0.15)';
+                    statusDiv.style.border = '1px solid #ef4444';
+                    statusDiv.style.color = '#f87171';
+                    statusDiv.innerHTML = '❌ Payment Cancelled';
+                }
+            }
+
             input.value = '';
             addUserMessage(message);
 
             try {
                 const payload = {
-                    messages: [...chatHistory, { role: 'user', content: message }]
+                    messages: [...chatHistory, { role: 'user', content: message }],
+                    conversation_hash: currentConversationHash
                 };
+
+                const platform = document.getElementById('platformSelect') ? document.getElementById('platformSelect').value : 'android';
 
                 const res = await fetch(API_URL, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Platform': platform
+                    },
                     body: JSON.stringify(payload)
                 });
 
@@ -612,6 +637,21 @@
 
                 addAssistantMessage(assistantText);
 
+                if (assistantText.toLowerCase().includes('cancelled') || assistantText.toLowerCase().includes('canceled')) {
+                    const statusDiv = document.getElementById('paymentStatus');
+                    if (statusDiv) {
+                        statusDiv.className = 'payment-status cancelled';
+                        statusDiv.style.background = 'rgba(239, 68, 68, 0.15)';
+                        statusDiv.style.border = '1px solid #ef4444';
+                        statusDiv.style.color = '#f87171';
+                        statusDiv.innerHTML = '❌ Payment Cancelled';
+                    }
+                    if (currentPollingInterval) {
+                        clearInterval(currentPollingInterval);
+                        currentPollingInterval = null;
+                    }
+                }
+
                 // Render Kundali report upsell CTA if available
                 if (data.links?.report_upsell && data.links.report_upsell.type === 'kundali_offer') {
                     displayKundaliReportUpsell(data.links.report_upsell);
@@ -624,15 +664,24 @@
 
                 if (data.links?.payment_link) {
                     const link = data.links.payment_link;
-                    const linkHtml = `
-                        <div class="payment-link">
-                            <strong>${link.title}</strong><br>
-                            <a href="${link.url}" target="_blank" rel="opener">
-                                💳 Open Payment Page
-                            </a>
+                    const simPageUrl = `/payment/simulate?order_id=${encodeURIComponent(link.order_id)}&sku=${encodeURIComponent(link.url)}&product_type=${encodeURIComponent(link.product_type || '')}`;
+
+                    const linkCard = document.createElement('div');
+                    linkCard.className = 'payment-link-card';
+                    linkCard.style.cssText = 'background:rgba(33, 150, 243, 0.12); border:1px solid #2196f3; border-radius:12px; padding:16px; margin:14px 0;';
+
+                    linkCard.innerHTML = `
+                        <div style="font-weight:bold; font-size:16px; color:#90caf9; margin-bottom:10px;">${escapeHtml(link.title)}</div>
+                        <div style="font-size:13px; color:#cfd8dc; margin-bottom:6px;"><strong>🛒 SKU / URL:</strong> <a href="${simPageUrl}" target="_blank" style="background:#1e293b; color:#38bdf8; padding:3px 10px; border-radius:5px; font-family:monospace; text-decoration:none; font-weight:600;">${escapeHtml(link.url)} ↗</a></div>
+                        <div style="font-size:13px; color:#cfd8dc; margin-bottom:6px;"><strong>💳 Payment Type:</strong> <span style="color:#4ade80; font-weight:600;">${escapeHtml(link.type)}</span></div>
+                        <div style="font-size:13px; color:#cfd8dc; margin-bottom:14px;"><strong>📍 Order ID:</strong> <code>${escapeHtml(link.order_id)}</code></div>
+                        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                            <button onclick="simulatePaymentCompletion('${link.order_id}', '${link.product_type}')" style="background:#22c55e; color:#052e16; border:none; padding:10px 18px; border-radius:8px; font-weight:700; font-size:14px; cursor:pointer; box-shadow:0 2px 6px rgba(34,197,94,0.3);">✅ Simulate Payment Success</button>
+                            <a href="${simPageUrl}" target="_blank" style="display:inline-block; background:#1976d2; color:#fff; text-decoration:none; padding:10px 18px; border-radius:8px; font-weight:700; font-size:14px; box-shadow:0 2px 6px rgba(25,118,210,0.3);">🌐 Open Payment Page</a>
                         </div>
                     `;
-                    document.getElementById('chatMessages').innerHTML += linkHtml;
+
+                    document.getElementById('chatMessages').appendChild(linkCard);
 
                     if (link.order_id) {
                         console.log('🎯 Payment link shown for order:', link.order_id);
@@ -648,6 +697,78 @@
             } catch (e) {
                 console.error('❌ Error:', e);
                 addAssistantMessage(`Error: ${e.message}`);
+            }
+        }
+
+        // =============================================
+        // UPDATE PAYMENT STATUS CARD IN-PLACE
+        // =============================================
+
+        function updatePaymentStatusToSuccess(message = '✅ Payment Verified Successfully!') {
+            if (currentPollingInterval) {
+                clearInterval(currentPollingInterval);
+                currentPollingInterval = null;
+            }
+
+            const box = document.getElementById('chatMessages');
+            const allStatusDivs = document.querySelectorAll('.payment-status, #paymentStatus');
+
+            if (allStatusDivs.length > 0) {
+                const target = allStatusDivs[0];
+                target.id = 'paymentStatus';
+                target.className = 'payment-status success';
+                target.style.display = 'block';
+                target.innerHTML = message;
+
+                // Remove any extraneous status cards
+                for (let i = 1; i < allStatusDivs.length; i++) {
+                    allStatusDivs[i].remove();
+                }
+            } else {
+                const statusDiv = document.createElement('div');
+                statusDiv.id = 'paymentStatus';
+                statusDiv.className = 'payment-status success';
+                statusDiv.innerHTML = message;
+                box.appendChild(statusDiv);
+            }
+
+            box.scrollTop = box.scrollHeight;
+        }
+
+        // =============================================
+        // SIMULATE PAYMENT COMPLETION (POST /payment/status)
+        // =============================================
+
+        async function simulatePaymentCompletion(orderId, productType) {
+            console.log('⚡ Simulating payment completion via POST /payment/status for order:', orderId);
+            try {
+                const res = await fetch(`${window.location.origin}/payment/status`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        order_id: orderId,
+                        payment_status: 'completed',
+                        payment_id: 'GPA.SIM-' + Date.now(),
+                        product_type: productType || 'kundali'
+                    })
+                });
+                const result = await res.json();
+                console.log('✅ Simulation result:', result);
+
+                updatePaymentStatusToSuccess('✅ Payment Verified Successfully via POST!');
+
+                if (result.success) {
+                    if (productType === 'janmarashi' || result.product_type === 'janmarashi') {
+                        if (result.data) displayJanmarashiResults(result.data);
+                    } else {
+                        const dlUrl = result.download_url || (result.data && result.data.download_url);
+                        if (dlUrl) {
+                            displayKundaliResults({ download_url: dlUrl });
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('❌ Simulation error:', e);
             }
         }
 
@@ -681,6 +802,18 @@
                     const response = await fetch(`${PAYMENT_STATUS_URL}?order_id=${orderId}`);
                     const result = await response.json();
 
+                    if (result.status === 'cancelled' || result.payment_status === 'cancelled' || result.status === 'failed') {
+                        console.log('❌ Order cancelled/failed:', result);
+                        clearInterval(currentPollingInterval);
+                        currentPollingInterval = null;
+                        statusDiv.className = 'payment-status cancelled';
+                        statusDiv.style.background = 'rgba(239, 68, 68, 0.15)';
+                        statusDiv.style.border = '1px solid #ef4444';
+                        statusDiv.style.color = '#f87171';
+                        statusDiv.innerHTML = '❌ Payment Cancelled';
+                        return;
+                    }
+
                     if (result.success && result.payment_completed) {
                         if (result.status === 'pending_delivery' || result.delivery === 'pending') {
                             console.log('⏳ Payment verified, Janma Rashi calculation pending...', result);
@@ -688,10 +821,7 @@
                             statusDiv.innerHTML = '🔮 Payment received! Your Janma Rashi is being calculated...';
                         } else {
                             console.log('✅ PAYMENT COMPLETED & DELIVERED FROM POLLING!', result);
-                            clearInterval(currentPollingInterval);
-
-                            statusDiv.className = 'payment-status success';
-                            statusDiv.innerHTML = '✅ Payment Verified Successfully!';
+                            updatePaymentStatusToSuccess('✅ Payment Verified Successfully!');
 
                             if (productType === 'janmarashi' || result.product_type === 'janmarashi') {
                                 displayJanmarashiResults(result.data);
@@ -743,22 +873,8 @@
                 return;
             }
 
-            if (currentPollingInterval) {
-                console.log('⏹️  Stopping polling');
-                clearInterval(currentPollingInterval);
-            }
-
-            const statusDiv = document.getElementById('paymentStatus');
-            if (statusDiv) {
-                statusDiv.style.display = 'none';
-            }
-
-            const box = document.getElementById('chatMessages');
-
-            const successMsg = document.createElement('div');
-            successMsg.className = 'payment-status success';
-            successMsg.innerHTML = '✅ Payment Verified Successfully!';
-            box.appendChild(successMsg);
+            // ✅ Update the existing "Waiting for payment" card directly to success
+            updatePaymentStatusToSuccess('✅ Payment Verified Successfully!');
 
             if (productType === 'janmarashi' && result && result.data) {
                 console.log('🌙 Displaying janmarashi from storage');
@@ -774,10 +890,8 @@
                 }
             }
 
+            const box = document.getElementById('chatMessages');
             box.scrollTop = box.scrollHeight;
-
-            // ✅ Save updated chat state
-            saveChatState();
 
             // ✅ Clear paymentCompleted so it doesn't show up again in future sessions
             localStorage.removeItem('paymentCompleted');
@@ -896,7 +1010,7 @@
             const box = document.getElementById('chatMessages');
             const card = document.createElement('div');
             card.className = 'report-upsell-card';
-            card.style.cssText = 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 16px; border-radius: 12px; margin: 12px 0; max-width: 70%; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.25);';
+            card.style.cssText = 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 16px; border-radius: 12px; margin: 10px 0; max-width: 70%; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.25);';
             
             const ctaText = escapeHtml(upsell.cta || 'Get your detailed Kundali report');
             const priceVal = upsell.price != null ? upsell.price : '';
@@ -914,20 +1028,8 @@
         }
 
         // =============================================
-        // ADD MESSAGES TO CHAT & SAVE SESSION
+        // ADD MESSAGES TO CHAT
         // =============================================
-
-        function saveChatState() {
-            try {
-                const box = document.getElementById('chatMessages');
-                if (box) {
-                    sessionStorage.setItem('savedChatMessages', box.innerHTML);
-                    sessionStorage.setItem('savedChatHistory', JSON.stringify(chatHistory));
-                }
-            } catch (e) {
-                console.warn('Failed to save chat state:', e);
-            }
-        }
 
         function addUserMessage(text) {
             const box = document.getElementById('chatMessages');
@@ -936,7 +1038,6 @@
             msg.innerHTML = `<div class="text">${escapeHtml(text)}</div>`;
             box.appendChild(msg);
             chatHistory.push({ role: 'user', content: text });
-            saveChatState();
         }
 
         function addAssistantMessage(text) {
@@ -945,7 +1046,6 @@
             msg.className = 'message assistant-message';
             msg.innerHTML = `<div class="text">${formatMessage(text)}</div>`;
             box.appendChild(msg);
-            saveChatState();
         }
 
         function escapeHtml(text) {
