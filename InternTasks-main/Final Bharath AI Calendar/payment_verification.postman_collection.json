@@ -1,0 +1,199 @@
+{
+  "info": {
+    "_postman_id": "b8f4119e-990a-4296-b072-payment-server-chk",
+    "name": "Bharat AI Calendar - Payment Verification",
+    "description": "Postman collection to check payment status and verify payment completion on server http://165.232.177.1",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://165.232.177.1",
+      "type": "string"
+    },
+    {
+      "key": "order_id",
+      "value": "order_S8xFDCZiPQjrUk",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Check Payment Status (GET)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/payment/status?order_id={{order_id}}",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "payment",
+            "status"
+          ],
+          "query": [
+            {
+              "key": "order_id",
+              "value": "{{order_id}}",
+              "description": "Order ID returned during payment request"
+            }
+          ]
+        },
+        "description": "Check whether payment has been completed for an order.\n\nResponse if Pending:\n{\n  \"success\": false,\n  \"payment_completed\": false,\n  \"status\": \"pending\",\n  \"order_id\": \"order_...\",\n  \"message\": \"Payment has not been completed yet.\"\n}\n\nResponse if Delivered / Completed:\n{\n  \"success\": true,\n  \"payment_completed\": true,\n  \"status\": \"delivered\",\n  \"order_id\": \"order_...\",\n  \"product_type\": \"kundali\",\n  \"data\": { ... }\n}"
+      },
+      "response": []
+    },
+    {
+      "name": "2. Verify & Complete Payment - Kundali (POST)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"order_id\": \"{{order_id}}\",\n  \"payment_id\": \"pay_test_completed_123\",\n  \"payment_status\": \"completed\",\n  \"product_type\": \"kundali\",\n  \"date\": \"2004-04-09\",\n  \"time\": \"01:00 AM\",\n  \"place\": \"Ongole\",\n  \"lang\": \"en\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/payment/verify",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "payment",
+            "verify"
+          ]
+        },
+        "description": "Verifies and delivers Kundali generation upon payment completion.\nReturns download_url for the generated PDF."
+      },
+      "response": []
+    },
+    {
+      "name": "3. Verify & Complete Payment - Janmarashi (POST)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"order_id\": \"order_S8w6C6N9lfEoFG\",\n  \"payment_id\": \"pay_test_completed_456\",\n  \"payment_status\": \"completed\",\n  \"product_type\": \"janmarashi\",\n  \"date\": \"2004-04-09\",\n  \"time\": \"01:00 AM\",\n  \"place\": \"Bengaluru\",\n  \"lang\": \"en\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/payment/verify",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "payment",
+            "verify"
+          ]
+        },
+        "description": "Verifies payment and calculates Janma Rashi (Moon Sign), returning moon sign, longitude, and rashi gemstone recommendations."
+      },
+      "response": []
+    },
+    {
+      "name": "4. Verify Razorpay Callback Format (POST)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"order_id\": \"order_S8xFDCZiPQjrUk\",\n  \"razorpay_payment_id\": \"pay_S8xFiJ9bRTVvlD\",\n  \"razorpay_signature\": \"189d0e1d604c83579d5cd307d71268aa28293cff8909014b2547cc6a06c93ffc\",\n  \"date\": \"2004-04-09\",\n  \"time\": \"01:00 AM\",\n  \"place\": \"Ongole\",\n  \"product_type\": \"kundali\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/payment/verify",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "payment",
+            "verify"
+          ]
+        },
+        "description": "Standard Razorpay callback verification."
+      },
+      "response": []
+    },
+    {
+      "name": "5. Download Kundali PDF (GET)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/kundali/download?order_id={{order_id}}",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "kundali",
+            "download"
+          ],
+          "query": [
+            {
+              "key": "order_id",
+              "value": "{{order_id}}"
+            }
+          ]
+        },
+        "description": "Directly downloads the generated Kundali PDF using the order ID."
+      },
+      "response": []
+    },
+    {
+      "name": "6. User Delivered Reports (GET)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/reports?user_id=test_user",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "reports"
+          ],
+          "query": [
+            {
+              "key": "user_id",
+              "value": "test_user"
+            }
+          ]
+        },
+        "description": "Fetch all delivered paid reports (Kundali, Janmarashi) for a user."
+      },
+      "response": []
+    }
+  ]
+}
