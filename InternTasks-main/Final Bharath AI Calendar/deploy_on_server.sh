@@ -29,7 +29,7 @@ if [ ! -f ".env" ]; then
 SARVAM_API_KEY=
 RAZORPAY_KEY_ID=
 RAZORPAY_KEY_SECRET=
-KUNDALI_PRICE=199
+KUNDALI_PRICE=129
 JANMARASHI_PRICE=20
 KUNDALI_PDF_API=https://debug.bharatcalendars.in:8443/api/kundali/generate-pdf
 JANMARASHI_API=https://debug.bharatcalendars.in:8443/api/janamrashi/moon-rashi

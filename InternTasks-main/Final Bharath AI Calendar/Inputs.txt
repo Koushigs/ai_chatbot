@@ -22,7 +22,7 @@ Inputs
         },
         {
             "role": "assistant",
-            "content": "🎯 KUNDALI GENERATION (BIRTH CHART)\n\n✅ Birth details found:\n  📅 Date: 2004-04-09\n  🕐 Time: 01:00 AM\n  📍 Place: 01:00 AM\n\n💰 Cost: ₹199 (One-time payment)\n\nYou will receive:\n  📄 Detailed birth chart PDF\n  🔍 Complete astrological analysis\n  💎 Personalized insights\n\nDo you want to proceed with payment?\n(Reply: yes or no)"
+            "content": "🎯 KUNDALI GENERATION (BIRTH CHART)\n\n✅ Birth details found:\n  📅 Date: 2004-04-09\n  🕐 Time: 01:00 AM\n  📍 Place: 01:00 AM\n\n💰 Cost: ₹129 (One-time payment)\n\nYou will receive:\n  📄 Detailed birth chart PDF\n  🔍 Complete astrological analysis\n  💎 Personalized insights\n\nDo you want to proceed with payment?\n(Reply: yes or no)"
         }
         {
         "role": "user",

@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Product Prices
-KUNDALI_PRICE = int(os.getenv("KUNDALI_PRICE", "199"))
+KUNDALI_PRICE = int(os.getenv("KUNDALI_PRICE", "129"))
 JANMARASHI_PRICE = int(os.getenv("JANMARASHI_PRICE", "20"))
 
 # SSL / CA Bundle configuration

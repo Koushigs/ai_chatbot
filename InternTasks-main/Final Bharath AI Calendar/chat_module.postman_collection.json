@@ -204,7 +204,7 @@
                 "invoke"
               ]
             },
-            "description": "## Kundali Flow - Quick Request Guide\n\n**🌙 Request-1: User asks for kundali**\n\n_\"Generate kundali for 2004-04-09, 01:00 AM, Ongole\"_  \n→ **Shows ₹199 payment confirmation** (`awaiting_payment_confirmation`)\n\n**💳 Request-2: User says \"yes\"**  \n_\"yes\"_  \n→ **Creates Razorpay order → Payment link** (`order_S8xFDCZiPQjrUk`)\n\n**✅ Request-3: Razorpay success callback**  \n`POST /paymentverify` with `order_id`, `razorpay_payment_id`, `razorpay_signature`  \n→ **Generates PDF → Download URL**\n\n**📥 Request-4: Download PDF**  \n`GET download_url` from Request-3  \n→ **Direct PDF file download using the link**"
+            "description": "## Kundali Flow - Quick Request Guide\n\n**🌙 Request-1: User asks for kundali**\n\n_\"Generate kundali for 2004-04-09, 01:00 AM, Ongole\"_  \n→ **Shows ₹129 payment confirmation** (`awaiting_payment_confirmation`)\n\n**💳 Request-2: User says \"yes\"**  \n_\"yes\"_  \n→ **Creates Razorpay order → Payment link** (`order_S8xFDCZiPQjrUk`)\n\n**✅ Request-3: Razorpay success callback**  \n`POST /paymentverify` with `order_id`, `razorpay_payment_id`, `razorpay_signature`  \n→ **Generates PDF → Download URL**\n\n**📥 Request-4: Download PDF**  \n`GET download_url` from Request-3  \n→ **Direct PDF file download using the link**"
           },
           "response": []
         },
@@ -215,7 +215,7 @@
             "header": [],
             "body": {
               "mode": "raw",
-              "raw": "{\r\n  \"messages\": [\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"Generate kundali for 2004-04-09, 01:00 AM, Ongole\"\r\n        },\r\n        {\r\n            \"role\": \"assistant\",\r\n            \"content\": \"🎯 KUNDALI GENERATION (BIRTH CHART)\\n\\n✅ Birth details found:\\n  📅 Date: 2004-04-09\\n  🕐 Time: 01:00 AM\\n  📍 Place: 01:00 AM\\n\\n💰 Cost: ₹199 (One-time payment)\\n\\nYou will receive:\\n  📄 Detailed birth chart PDF\\n  🔍 Complete astrological analysis\\n  💎 Personalized insights\\n\\nDo you want to proceed with payment?\\n(Reply: yes or no)\"\r\n        },\r\n        {\r\n        \"role\": \"user\",\r\n        \"content\": \"yes\"\r\n      }\r\n    ]\r\n}",
+              "raw": "{\r\n  \"messages\": [\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"Generate kundali for 2004-04-09, 01:00 AM, Ongole\"\r\n        },\r\n        {\r\n            \"role\": \"assistant\",\r\n            \"content\": \"🎯 KUNDALI GENERATION (BIRTH CHART)\\n\\n✅ Birth details found:\\n  📅 Date: 2004-04-09\\n  🕐 Time: 01:00 AM\\n  📍 Place: 01:00 AM\\n\\n💰 Cost: ₹129 (One-time payment)\\n\\nYou will receive:\\n  📄 Detailed birth chart PDF\\n  🔍 Complete astrological analysis\\n  💎 Personalized insights\\n\\nDo you want to proceed with payment?\\n(Reply: yes or no)\"\r\n        },\r\n        {\r\n        \"role\": \"user\",\r\n        \"content\": \"yes\"\r\n      }\r\n    ]\r\n}",
               "options": {
                 "raw": {
                   "language": "json"

@@ -85,7 +85,7 @@ nano .env
 Paste your production secrets:
 ```env
 SARVAM_API_KEY=your_sarvam_api_key_here
-KUNDALI_PRICE=199
+KUNDALI_PRICE=129
 JANMARASHI_PRICE=20
 KUNDALI_PDF_API=https://debug.bharatcalendars.in:8443/api/kundali/generate-pdf
 JANMARASHI_API=https://debug.bharatcalendars.in:8443/api/janamrashi/moon-rashi

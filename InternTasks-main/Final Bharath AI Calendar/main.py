@@ -1498,7 +1498,7 @@ def clean_markdown(text: str) -> str:
 
 
 def sanitize_predictive_response(text: str) -> str:
-    """Strips any LLM-generated Kundali sales pitches, price/cost mentions (₹199), or payment prompts."""
+    """Strips any LLM-generated Kundali sales pitches, price/cost mentions (₹129), or payment prompts."""
     if not text:
         return ""
     
@@ -1632,7 +1632,7 @@ def payment_simulator_page(
             prod_type = "kundali"
 
     display_title = "Janmarashi (Moon Sign)" if prod_type == "janmarashi" else "Kundali PDF Report"
-    amount = "₹20" if prod_type == "janmarashi" else "₹199"
+    amount = f"₹{JANMARASHI_PRICE}" if prod_type == "janmarashi" else f"₹{KUNDALI_PRICE}"
     sku_val = sku or ("getrashi" if prod_type == "janmarashi" else "buy.short.kundli")
 
     html = f"""<!DOCTYPE html>
