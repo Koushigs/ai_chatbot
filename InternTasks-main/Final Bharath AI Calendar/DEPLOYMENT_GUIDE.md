@@ -43,12 +43,34 @@ docker compose version
 Option A: **Via Git (Recommended)**
 ```bash
 cd /var/www
-git clone <YOUR_GIT_REPOSITORY_URL> app
-cd app/"Final Bharath AI Calendar"
+# If /var/www doesn't exist: sudo mkdir -p /var/www && cd /var/www
+git clone https://github.com/Koushigs/ai_chatbot.git app
+cd app/"InternTasks-main/Final Bharath AI Calendar"
 ```
 
 Option B: **Via SCP / FileZilla**
 Transfer the `Final Bharath AI Calendar` folder directly to `/var/www/app`.
+
+---
+
+## ⚡ Quick 1-Command Automated Deployment (Easiest)
+
+We've provided a fully automated deployment script [`deploy_on_server.sh`](deploy_on_server.sh) that installs Docker, Nginx, configures the firewall, sets up the databases, and launches the container in one go:
+
+```bash
+cd /var/www/app/"InternTasks-main/Final Bharath AI Calendar"
+
+# 1. Fill in your environment variables (.env)
+nano .env
+
+# 2. Make script executable and run it
+chmod +x deploy_on_server.sh
+./deploy_on_server.sh
+```
+
+---
+
+## Manual Step-by-Step Deployment (Alternative)
 
 ---
 

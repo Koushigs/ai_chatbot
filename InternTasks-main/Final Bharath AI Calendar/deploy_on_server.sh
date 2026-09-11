@@ -1,7 +1,8 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Starting deployment for FastAPI App on Server (165.232.177.1)..."
+SERVER_IP=$(curl -s ifconfig.me || echo "YOUR_SERVER_IP")
+echo "🚀 Starting deployment for FastAPI App on Server ($SERVER_IP)..."
 
 # 1. Update system packages
 echo "📦 Updating system packages..."
@@ -69,5 +70,5 @@ sudo ufw allow 443/tcp
 sudo ufw --force enable
 
 echo "✅ DEPLOYMENT COMPLETE!"
-echo "📍 Access your application live at: http://165.232.177.1 or http://chat.bharatcalendars.in:8001"
+echo "📍 Access your application live at: http://$SERVER_IP or http://$SERVER_IP:8001"
 echo "📜 View container logs anytime using: sudo docker compose logs -f"
