@@ -89,7 +89,7 @@ KUNDALI_PRICE=199
 JANMARASHI_PRICE=20
 KUNDALI_PDF_API=https://debug.bharatcalendars.in:8443/api/kundali/generate-pdf
 JANMARASHI_API=https://debug.bharatcalendars.in:8443/api/janamrashi/moon-rashi
-KUNDALI_SKU=buy.kundli.short
+KUNDALI_SKU=buy.short.kundli
 JANMARASHI_SKU=getrashi
 ```
 Press `Ctrl + O`, `Enter` to save, and `Ctrl + X` to exit.

@@ -996,10 +996,12 @@ api.add_middleware(
 # =============================================
 # SKU REDIRECT ROUTES (BEFORE STATIC MOUNT)
 # =============================================
+@api.get("/static/buy.short.kundli")
+@api.get("/buy.short.kundli")
 @api.get("/static/buy.kundli.short")
 @api.get("/buy.kundli.short")
 def redirect_kundli_sku(order_id: Optional[str] = Query(None)):
-    target = "/payment/simulate?sku=buy.kundli.short"
+    target = "/payment/simulate?sku=buy.short.kundli"
     if order_id:
         target += f"&order_id={order_id}"
     return RedirectResponse(url=target, status_code=307)
@@ -1036,7 +1038,7 @@ def serve_chat_tester():
 # =============================================
 # MULTI-PLATFORM PAYMENT CONFIGURATION
 # =============================================
-KUNDALI_SKU = os.getenv("KUNDALI_SKU", "buy.kundli.short")
+KUNDALI_SKU = os.getenv("KUNDALI_SKU", "buy.short.kundli")
 JANMARASHI_SKU = os.getenv("JANMARASHI_SKU", "getrashi")
 
 safe_print("\n" + "="*70)
@@ -1591,8 +1593,10 @@ def home():
 
 
 @api.get("/getrashi", response_class=HTMLResponse)
+@api.get("/buy.short.kundli", response_class=HTMLResponse)
 @api.get("/buy.kundli.short", response_class=HTMLResponse)
 @api.get("/static/getrashi", response_class=HTMLResponse)
+@api.get("/static/buy.short.kundli", response_class=HTMLResponse)
 @api.get("/static/buy.kundli.short", response_class=HTMLResponse)
 @api.get("/payment/simulate", response_class=HTMLResponse)
 def payment_simulator_page(
@@ -1629,7 +1633,7 @@ def payment_simulator_page(
 
     display_title = "Janmarashi (Moon Sign)" if prod_type == "janmarashi" else "Kundali PDF Report"
     amount = "₹20" if prod_type == "janmarashi" else "₹199"
-    sku_val = sku or ("getrashi" if prod_type == "janmarashi" else "buy.kundli.short")
+    sku_val = sku or ("getrashi" if prod_type == "janmarashi" else "buy.short.kundli")
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
