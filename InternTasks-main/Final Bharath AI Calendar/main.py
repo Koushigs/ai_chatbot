@@ -854,18 +854,9 @@ def extract_birth_details(text: str) -> Optional[Dict[str, str]]:
 
             place_text = ", ".join(valid_parts) if valid_parts else "Unknown"
 
-        # Check for explicit name (e.g. name: Shravan, for Shravan Shetty)
-        name_val = "Devotee"
-        name_match = re.search(r'\b(?:name|for|naam)\s*[:=-]?\s*([A-Za-z\s]{2,30})\b', text, flags=re.IGNORECASE)
-        if name_match:
-            cand = name_match.group(1).strip()
-            if cand.lower() not in ["kundali", "janmarashi", "horoscope", "birth chart", "today", "tomorrow", "panchang", "please", "yes", "no"]:
-                name_val = cand.title()
-
         coords = get_coordinates_for_place(place_text)
 
         result = {
-            "name": name_val,
             "date": date_str,
             "time": time_str,
             "place": place_text if place_text else "Unknown",
@@ -3007,8 +2998,6 @@ def verify_or_update_payment(request: PaymentVerifyRequest, http_request: Reques
             raw_lang = getattr(request, 'lang', None) or stored_data.get("lang") or "en"
             lang_code = str(raw_lang).upper()
             formatted_time = format_time_for_api(birth_time).lower()
-            name_val = getattr(request, 'name', None) or stored_data.get("name") or "Devotee"
-            
             # Resolve latitude & longitude
             lat_val = getattr(request, 'latitude', None) or stored_data.get("latitude")
             lon_val = getattr(request, 'longitude', None) or stored_data.get("longitude")
@@ -3018,7 +3007,6 @@ def verify_or_update_payment(request: PaymentVerifyRequest, http_request: Reques
                 lat_val, lon_val = float(lat_val), float(lon_val)
 
             pdf_payload = {
-                "name": name_val,
                 "date": date,
                 "time": formatted_time,
                 "latitude": lat_val,
@@ -3041,7 +3029,6 @@ def verify_or_update_payment(request: PaymentVerifyRequest, http_request: Reques
                 if pdf_response.status_code != 200:
                     safe_print(f"❌ PDF API Error Details: {pdf_response.text}")
                     pay_data = {
-                        "name": name_val,
                         "date": date,
                         "time": birth_time,
                         "place": place,
@@ -3194,7 +3181,6 @@ def download_kundali(
         safe_print(f"Decoded - Date: {date}, Time: {time}, Place: {place_clean}")
         
         p_stored_data = pdata.get("data", {}) if pdata else {}
-        req_name = name or p_stored_data.get("name") or "Devotee"
         req_lat = latitude or p_stored_data.get("latitude")
         req_lon = longitude or p_stored_data.get("longitude")
         
@@ -3208,7 +3194,6 @@ def download_kundali(
         lang_code = (lang or p_stored_data.get("lang") or "en").upper()
         
         pdf_payload = {
-            "name": req_name,
             "date": date,
             "time": formatted_time,
             "latitude": req_lat,
