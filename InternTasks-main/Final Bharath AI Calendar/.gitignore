@@ -21,3 +21,4 @@ test_all_endpoints.py
 test_chatfix8_muhurat.py
 test_live_muhurat_queries.py
 test_chatfix10_analytics.py
+test_kundali_flow.py

@@ -854,10 +854,23 @@ def extract_birth_details(text: str) -> Optional[Dict[str, str]]:
 
             place_text = ", ".join(valid_parts) if valid_parts else "Unknown"
 
+        # Check for explicit name (e.g. name: Shravan, for Shravan Shetty)
+        name_val = "Devotee"
+        name_match = re.search(r'\b(?:name|for|naam)\s*[:=-]?\s*([A-Za-z\s]{2,30})\b', text, flags=re.IGNORECASE)
+        if name_match:
+            cand = name_match.group(1).strip()
+            if cand.lower() not in ["kundali", "janmarashi", "horoscope", "birth chart", "today", "tomorrow", "panchang", "please", "yes", "no"]:
+                name_val = cand.title()
+
+        coords = get_coordinates_for_place(place_text)
+
         result = {
+            "name": name_val,
             "date": date_str,
             "time": time_str,
             "place": place_text if place_text else "Unknown",
+            "latitude": coords[0],
+            "longitude": coords[1],
             "lang": extract_language(text)
         }
         safe_print(f"[EXTRACT] ✅ Found: {result}")
@@ -883,6 +896,33 @@ def format_time_for_api(time_str: str) -> str:
             hr_12 = 12 if hr == 0 else hr
             return f"{hr_12:02d}:{mn} AM"
     return time_str
+
+
+# =============================================
+# GEOCODING COORDINATE RESOLVER
+# =============================================
+def get_coordinates_for_place(place: str) -> Tuple[float, float]:
+    """Dynamically resolve latitude and longitude for a city/place name via Nominatim."""
+    if not place:
+        return (12.9716, 77.5946)
+    
+    try:
+        url = "https://nominatim.openstreetmap.org/search"
+        headers = {"User-Agent": "BharatCalendarAI/1.0 (contact@bharatcalendars.in)"}
+        params = {"q": place, "format": "json", "limit": 1}
+        res = requests.get(url, params=params, headers=headers, timeout=4)
+        if res.status_code == 200:
+            data = res.json()
+            if data and len(data) > 0:
+                lat = round(float(data[0]["lat"]), 4)
+                lon = round(float(data[0]["lon"]), 4)
+                safe_print(f"📍 Geocoded '{place}' via Nominatim -> lat={lat}, lon={lon}")
+                return (lat, lon)
+    except Exception as geo_err:
+        safe_print(f"⚠️ Geocoding exception for '{place}': {geo_err}")
+        
+    safe_print(f"⚠️ Fallback coordinates used for '{place}' -> (12.9716, 77.5946)")
+    return (12.9716, 77.5946)
 
 
 def extract_updates_to_birth_details(current_details: Dict[str, str], user_query: str) -> Tuple[Dict[str, str], bool]:
@@ -1443,6 +1483,9 @@ class PaymentVerifyRequest(BaseModel):
     date: Optional[str] = None
     time: Optional[str] = None
     place: Optional[str] = None
+    name: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     product_type: Optional[str] = "kundali"
     lang: Optional[str] = "en"
     user_id: Optional[str] = None
@@ -2959,14 +3002,33 @@ def verify_or_update_payment(request: PaymentVerifyRequest, http_request: Reques
                 }
         
         else:
-            print(f"\n📄 Generating Kundali PDF...")
+            safe_print(f"\n📄 Generating Kundali PDF...")
             
-            lang = (getattr(request, 'lang', 'en') or "en").lower()
-            formatted_time = format_time_for_api(birth_time)
-            pdf_payload = {"date": date, "time": formatted_time, "place": place, "lang": lang}
+            raw_lang = getattr(request, 'lang', None) or stored_data.get("lang") or "en"
+            lang_code = str(raw_lang).upper()
+            formatted_time = format_time_for_api(birth_time).lower()
+            name_val = getattr(request, 'name', None) or stored_data.get("name") or "Devotee"
+            
+            # Resolve latitude & longitude
+            lat_val = getattr(request, 'latitude', None) or stored_data.get("latitude")
+            lon_val = getattr(request, 'longitude', None) or stored_data.get("longitude")
+            if lat_val is None or lon_val is None:
+                lat_val, lon_val = get_coordinates_for_place(place)
+            else:
+                lat_val, lon_val = float(lat_val), float(lon_val)
+
+            pdf_payload = {
+                "name": name_val,
+                "date": date,
+                "time": formatted_time,
+                "latitude": lat_val,
+                "longitude": lon_val,
+                "lang": lang_code
+            }
+            safe_print(f"📄 Kundali PDF API Payload: {pdf_payload}")
             
             try:
-                verify_param = BHARAT_CA_BUNDLE if BHARAT_CA_BUNDLE else True
+                verify_param = BHARAT_CA_BUNDLE if BHARAT_CA_BUNDLE else False
                 pdf_response = requests.post(
                     KUNDALI_PDF_API,
                     json=pdf_payload,
@@ -2974,15 +3036,18 @@ def verify_or_update_payment(request: PaymentVerifyRequest, http_request: Reques
                     verify=verify_param
                 )
                 
-                print(f"PDF API Response Status: {pdf_response.status_code}")
+                safe_print(f"PDF API Response Status: {pdf_response.status_code}")
                 
                 if pdf_response.status_code != 200:
-                    print(f"❌ PDF API Error Details: {pdf_response.text}")
+                    safe_print(f"❌ PDF API Error Details: {pdf_response.text}")
                     pay_data = {
+                        "name": name_val,
                         "date": date,
                         "time": birth_time,
                         "place": place,
-                        "lang": lang
+                        "latitude": lat_val,
+                        "longitude": lon_val,
+                        "lang": lang_code
                     }
                     save_payment(
                         order_id=order_id,
@@ -3000,7 +3065,7 @@ def verify_or_update_payment(request: PaymentVerifyRequest, http_request: Reques
                     }
                 
                 pdf_size = len(pdf_response.content)
-                print(f"✅ PDF generated successfully! Size: {pdf_size} bytes")
+                safe_print(f"✅ PDF generated successfully! Size: {pdf_size} bytes")
                 
                 try:
                     import tempfile
@@ -3009,18 +3074,21 @@ def verify_or_update_payment(request: PaymentVerifyRequest, http_request: Reques
                     pdf_path = os.path.join(temp_dir, pdf_filename)
                     with open(pdf_path, 'wb') as f:
                         f.write(pdf_response.content)
-                    print(f"✅ PDF saved temporarily: {pdf_path}")
+                    safe_print(f"✅ PDF saved temporarily: {pdf_path}")
                 except Exception as save_err:
-                    print(f"⚠️ Note: Local temp PDF save skipped ({save_err})")
+                    safe_print(f"⚠️ Note: Local temp PDF save skipped ({save_err})")
                 
                 base_url = get_base_url(http_request)
-                download_url = f"{base_url}/kundali/download?date={quote(date)}&time={quote(birth_time)}&place={quote(place)}&payment_id={payment_id}&lang={quote(lang)}"
+                download_url = f"{base_url}/kundali/download?date={quote(date)}&time={quote(birth_time)}&place={quote(place)}&payment_id={payment_id}&lang={quote(lang_code)}&latitude={lat_val}&longitude={lon_val}&name={quote(name_val)}"
                 
                 pay_data = {
+                    "name": name_val,
                     "date": date,
                     "time": birth_time,
                     "place": place,
-                    "lang": lang,
+                    "latitude": lat_val,
+                    "longitude": lon_val,
+                    "lang": lang_code,
                     "download_url": download_url,
                     "payment_status": "completed"
                 }
@@ -3091,9 +3159,12 @@ def verify_or_update_payment(request: PaymentVerifyRequest, http_request: Reques
 def download_kundali(
     date: str = Query(...),
     time: str = Query(...),
-    place: str = Query(...),
+    place: Optional[str] = Query(None),
     payment_id: str = Query(...),
-    lang: str = Query("en")
+    lang: str = Query("en"),
+    name: Optional[str] = Query(None),
+    latitude: Optional[float] = Query(None),
+    longitude: Optional[float] = Query(None)
 ):
     """Download Kundali PDF - Requires Verified Payment"""
     
@@ -3118,15 +3189,36 @@ def download_kundali(
     try:
         date = unquote(date)
         time = unquote(time)
-        place = unquote(place)
+        place_clean = unquote(place) if place else ""
         
-        safe_print(f"Decoded - Date: {date}, Time: {time}, Place: {place}")
+        safe_print(f"Decoded - Date: {date}, Time: {time}, Place: {place_clean}")
         
-        formatted_time = format_time_for_api(time)
-        pdf_payload = {"date": date, "time": formatted_time, "place": place, "lang": (lang or "en").lower()}
+        p_stored_data = pdata.get("data", {}) if pdata else {}
+        req_name = name or p_stored_data.get("name") or "Devotee"
+        req_lat = latitude or p_stored_data.get("latitude")
+        req_lon = longitude or p_stored_data.get("longitude")
+        
+        if req_lat is None or req_lon is None:
+            resolved_place = place_clean or p_stored_data.get("place", "Bengaluru")
+            req_lat, req_lon = get_coordinates_for_place(resolved_place)
+        else:
+            req_lat, req_lon = float(req_lat), float(req_lon)
+            
+        formatted_time = format_time_for_api(time).lower()
+        lang_code = (lang or p_stored_data.get("lang") or "en").upper()
+        
+        pdf_payload = {
+            "name": req_name,
+            "date": date,
+            "time": formatted_time,
+            "latitude": req_lat,
+            "longitude": req_lon,
+            "lang": lang_code
+        }
+        safe_print(f"📄 Kundali Download PDF API Payload: {pdf_payload}")
         
         try:
-            verify_param = BHARAT_CA_BUNDLE if BHARAT_CA_BUNDLE else True
+            verify_param = BHARAT_CA_BUNDLE if BHARAT_CA_BUNDLE else False
             pdf_response = requests.post(
                 KUNDALI_PDF_API,
                 json=pdf_payload,
