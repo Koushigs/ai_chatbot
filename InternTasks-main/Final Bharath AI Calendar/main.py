@@ -7,8 +7,8 @@ from pydantic import BaseModel
 from typing import List, Dict, Any, Optional, Tuple
 from agent import react_agent
 from datetime import datetime
-# pyrefly: ignore [missing-import]
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.messages import AIMessage, ToolMessage, SystemMessage
+from langgraph.errors import GraphRecursionError
 from recommendation_eligibility import RecommendationEligibilityEngine
 from product_formatter import (
     get_horoscope_recommendations, get_panchang_recommendations,
@@ -1486,6 +1486,82 @@ class PaymentVerifyRequest(BaseModel):
 # HELPER FUNCTIONS
 # =============================================
 
+MAX_HISTORY_MESSAGES = 8
+
+
+def _is_system_message(msg: Any) -> bool:
+    """Check if message is a system message (dict or BaseMessage)."""
+    if isinstance(msg, dict):
+        return msg.get("role") == "system" or msg.get("type") == "system"
+    return getattr(msg, "type", None) == "system" or isinstance(msg, SystemMessage)
+
+
+def _is_tool_message(msg: Any) -> bool:
+    """Check if message is a tool response message (dict or BaseMessage)."""
+    if isinstance(msg, dict):
+        return msg.get("role") == "tool" or msg.get("type") == "tool"
+    return getattr(msg, "type", None) == "tool" or isinstance(msg, ToolMessage)
+
+
+def _has_tool_calls(msg: Any) -> bool:
+    """Check if message has tool calls (dict or BaseMessage)."""
+    if isinstance(msg, dict):
+        return bool(msg.get("tool_calls"))
+    return bool(getattr(msg, "tool_calls", None))
+
+
+def trim_conversation_history(messages: List[Any], max_messages: int = MAX_HISTORY_MESSAGES) -> List[Any]:
+    """
+    Limits conversation history to the most recent messages while:
+    1. Preserving leading system message(s) at the beginning.
+    2. Preventing broken LangChain/LangGraph message sequences (e.g. keeping a ToolMessage
+       without its calling AIMessage).
+    3. Maintaining valid message relationships for dict and BaseMessage objects.
+    """
+    if not messages:
+        return []
+
+    # 1. Separate leading system message(s)
+    system_messages = []
+    idx = 0
+    while idx < len(messages) and _is_system_message(messages[idx]):
+        system_messages.append(messages[idx])
+        idx += 1
+
+    non_system = messages[idx:]
+    if len(non_system) <= max_messages:
+        return system_messages + non_system
+
+    # 2. Slicing the most recent non-system messages
+    start_idx = len(non_system) - max_messages
+
+    # 3. Ensure no orphaned ToolMessage: If start_idx lands on a ToolMessage,
+    # search backwards for the AIMessage that initiated the tool call(s)
+    if start_idx > 0 and _is_tool_message(non_system[start_idx]):
+        back_idx = start_idx - 1
+        found_caller = False
+        while back_idx >= 0:
+            if _has_tool_calls(non_system[back_idx]):
+                start_idx = back_idx
+                found_caller = True
+                break
+            elif _is_tool_message(non_system[back_idx]):
+                back_idx -= 1
+            else:
+                break
+
+        # If no calling AIMessage found backwards, advance forward past orphaned tool messages
+        if not found_caller:
+            while start_idx < len(non_system) and _is_tool_message(non_system[start_idx]):
+                start_idx += 1
+
+    # 4. Clean up any remaining leading orphaned ToolMessage
+    while start_idx < len(non_system) and _is_tool_message(non_system[start_idx]):
+        start_idx += 1
+
+    return system_messages + non_system[start_idx:]
+
+
 def get_conversation_hash(messages: List[Dict[str, Any]]) -> str:
     """Create stable session hash"""
     if not messages:
@@ -1866,21 +1942,24 @@ def invoke_agent(request: QueryRequest, http_request: Request):
     t_start = time.time()
     
     user_id = request.user_id
-    current_messages = request.messages.copy()
+    raw_messages = request.messages.copy()
     
     # Clean up trailing assistant messages if client echoed back history ending with an assistant message
-    while current_messages and current_messages[-1].get("role") == "assistant":
-        current_messages.pop()
+    while raw_messages and raw_messages[-1].get("role") == "assistant":
+        raw_messages.pop()
         
-    original_user_query = current_messages[-1]["content"] if current_messages else ""
-    conversation_hash = (request.conversation_hash.strip() if request.conversation_hash else "") or get_conversation_hash(current_messages)
+    original_user_query = raw_messages[-1]["content"] if raw_messages else ""
+    conversation_hash = (request.conversation_hash.strip() if request.conversation_hash else "") or get_conversation_hash(raw_messages)
+
+    # ✂️ Limit conversation history to the most recent MAX_HISTORY_MESSAGES while preserving system message and valid message pairs
+    current_messages = trim_conversation_history(raw_messages, max_messages=MAX_HISTORY_MESSAGES)
 
     all_pending = get_all_pending_requests()
 
     safe_print(f"\n{'='*70}")
     safe_print(f"📍 CONVERSATION: {conversation_hash} | USER_ID: {user_id}")
     safe_print(f"📝 USER QUERY: {original_user_query[:80]}")
-    safe_print(f"📊 MESSAGE COUNT: {len(current_messages)}")
+    safe_print(f"📊 MESSAGE COUNT: {len(current_messages)} (raw: {len(raw_messages)})")
     safe_print(f"⏳ PENDING REQUESTS: {list(all_pending.keys())}")
     safe_print(f"{'='*70}")
 
@@ -1910,9 +1989,9 @@ def invoke_agent(request: QueryRequest, http_request: Request):
     
     # If no pending_data exists in DB, but user query is "yes" and history contains birth details, recover pending_data
     if not pending_data and is_yes_response(user_response_lower):
-        hist_details = extract_birth_details_from_history(current_messages)
+        hist_details = extract_birth_details_from_history(raw_messages)
         if hist_details:
-            full_hist_text = " ".join(m.get("content", "").lower() for m in current_messages)
+            full_hist_text = " ".join(m.get("content", "").lower() for m in raw_messages)
             recovered_product = "janmarashi" if any(k in full_hist_text for k in ["rashi", "janma"]) else "kundali"
             pending_data = {
                 "product_type": recovered_product,
@@ -2194,8 +2273,10 @@ def invoke_agent(request: QueryRequest, http_request: Request):
     print("STEP 1: Getting AI Response from LangChain")
     print(f"{'='*70}")
 
+    config = {"recursion_limit": 8}
+
     try:
-        for event in react_agent.stream(inputs, stream_mode="values"):
+        for event in react_agent.stream(inputs, config=config, stream_mode="values"):
             msgs = event.get("messages", [])
             # 1. Look for AIMessage with non-empty text content
             for m in reversed(msgs):
@@ -2229,9 +2310,16 @@ def invoke_agent(request: QueryRequest, http_request: Request):
                         except Exception:
                             final_ai_response = str(m.content)
                         break
+    except GraphRecursionError as e:
+        safe_print(f"⚠️ Agent recursion limit reached: {e}")
+        final_ai_response = "Sorry I didnt quite Catch That"
     except (Exception, KeyboardInterrupt) as e:
-        safe_print(f"⚠️ Agent execution interrupted: {e}")
-        final_ai_response = "Request was cancelled or server was restarted."
+        if "recursion limit" in str(e).lower():
+            safe_print(f"⚠️ Agent recursion limit reached: {e}")
+            final_ai_response = "Sorry I didnt quite Catch That"
+        else:
+            safe_print(f"⚠️ Agent execution interrupted: {e}")
+            final_ai_response = "Request was cancelled or server was restarted."
 
     t_ai_done = time.time()
 
@@ -2291,7 +2379,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
         safe_print("🔮 JANMARASHI FLOW - ASK FOR CONFIRMATION")
         safe_print(f"{'='*70}")
 
-        birth_details = extract_birth_details_from_history(current_messages)
+        birth_details = extract_birth_details_from_history(raw_messages)
         if birth_details:
             save_pending_request(
                 conversation_hash=conversation_hash,
@@ -2398,7 +2486,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
             ]
             complete_chat[-1]["content"] = "\n".join(content_lines)
         else:
-            birth_details = extract_birth_details_from_history(current_messages)
+            birth_details = extract_birth_details_from_history(raw_messages)
             if birth_details:
                 save_pending_request(
                     conversation_hash=conversation_hash,
@@ -2487,7 +2575,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
             eligibility_engine.record_recommendation_served(conversation_hash, len(current_messages))
             safe_print(f"✅ Kundali report_upsell attached & recorded for conversation: {conversation_hash}")
 
-            birth_details = extract_birth_details_from_history(current_messages)
+            birth_details = extract_birth_details_from_history(raw_messages)
             if birth_details:
                 save_pending_request(
                     conversation_hash=conversation_hash,
@@ -3065,8 +3153,9 @@ def verify_or_update_payment(request: PaymentVerifyRequest, http_request: Reques
                 except Exception as save_err:
                     safe_print(f"⚠️ Note: Local temp PDF save skipped ({save_err})")
                 
+                name_val = getattr(request, 'name', None) or stored_data.get("name") or "User"
                 base_url = get_base_url(http_request)
-                download_url = f"{base_url}/kundali/download?date={quote(date)}&time={quote(birth_time)}&place={quote(place)}&payment_id={payment_id}&lang={quote(lang_code)}&latitude={lat_val}&longitude={lon_val}&name={quote(name_val)}"
+                download_url = f"{base_url}/kundali/download?date={quote(date)}&time={quote(birth_time)}&place={quote(place)}&payment_id={payment_id}&lang={quote(lang_code)}&latitude={lat_val}&longitude={lon_val}&name={quote(str(name_val))}"
                 
                 pay_data = {
                     "name": name_val,

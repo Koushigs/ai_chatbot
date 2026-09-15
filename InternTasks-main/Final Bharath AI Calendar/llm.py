@@ -14,6 +14,7 @@ model = ChatOpenAI(
     api_key=SARVAM_API_KEY,
     base_url="https://api.sarvam.ai/v1",
     temperature=0.2,
+    max_tokens=500,
 )
 
 print("Sarvam AI (sarvam-105b) model initialized successfully using ChatOpenAI client.")

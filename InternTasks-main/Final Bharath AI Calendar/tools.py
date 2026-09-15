@@ -156,12 +156,14 @@ def get_holidays(year: int = None, data_language: str = "EN") -> str:
 @tool
 def get_monthly_festivals(year: Optional[int] = None, month: Optional[str] = None, festival_name: Optional[str] = None, data_language: str = "EN") -> str:
     """
-    Fetches festival data for a specific month/year or searches for a specific festival across all months.
+    Fetches festival data for a specific month or searches for a specific festival.
+    
+    IMPORTANT: Always provide the specific 'month' (e.g., 'september', 'october') when the user asks for festivals in a month or asks for upcoming/current festivals. If no month is provided, it defaults to the current month. Avoid requesting all months unless the user explicitly asks for the entire year.
     
     Args:
-        year: The year to fetch (e.g., 2026). Defaults to current year.
-        month: The full month name (e.g., "september"). Optional.
-        festival_name: Specific festival name to search for across the year (e.g. "ganesh", "diwali", "holi"). Optional.
+        year: The year to fetch (e.g., 2025, 2026). Defaults to current year.
+        month: Full month name (e.g., "january", "february", ...). Defaults to the current month if omitted. Use "all" ONLY if user explicitly requests festivals for the entire year.
+        festival_name: Specific festival name to search for across the year or month (e.g. "ganesh", "diwali", "holi"). Optional.
         data_language: The language for the festival names (default "EN").
     """
     if not year:
@@ -170,13 +172,24 @@ def get_monthly_festivals(year: Optional[int] = None, month: Optional[str] = Non
     api_url = "https://api.bharatcalendars.in:3004/api/panchang/festival"
     headers = {"api_key": "anvl_bharat_cal123"}
     
-    # 🔍 If festival_name is provided OR if month is not specified, search across all 12 months in PARALLEL!
-    if festival_name or not month:
-        months_to_check = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]
-        found_festivals = []
-        target_kw = festival_name.lower().strip() if festival_name else ""
+    # Helper to check if item has actual festivals
+    def has_actual_festivals(item: dict) -> bool:
+        fest_list = item.get("festivals", [])
+        if not fest_list or fest_list == ["NA"] or fest_list == [""] or fest_list == [None]:
+            return False
+        return True
 
-        def fetch_month(m):
+    # 1. Search for a specific festival across the year or in specified month
+    if festival_name:
+        target_kw = festival_name.lower().strip()
+        is_all_or_empty = not month or month.lower().strip() in ["all", "all months", "entire year", "year", "all_months", "every month", "full year"]
+        months_to_check = (
+            ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]
+            if is_all_or_empty else [month.lower().strip()]
+        )
+        found_festivals = []
+
+        def fetch_month_search(m):
             try:
                 params = {"year": year, "month": m, "data_language": data_language, "app_language": "EN"}
                 res = requests.get(api_url, params=params, headers=headers, timeout=5)
@@ -185,35 +198,64 @@ def get_monthly_festivals(year: Optional[int] = None, month: Optional[str] = Non
                     if isinstance(data, list):
                         m_found = []
                         for item in data:
-                            fest_list = item.get("festivals", [])
-                            fest_str = " ".join(fest_list).lower()
-                            if target_kw:
-                                if target_kw in fest_str or any(k in fest_str for k in target_kw.split() if len(k) > 2):
-                                    m_found.append(item)
-                            elif not month:
+                            if not has_actual_festivals(item):
+                                continue
+                            fest_str = " ".join(item.get("festivals", [])).lower()
+                            if target_kw in fest_str or any(k in fest_str for k in target_kw.split() if len(k) > 2):
                                 m_found.append(item)
                         return m_found
             except Exception:
                 pass
             return []
 
-        with ThreadPoolExecutor(max_workers=12) as executor:
-            results = executor.map(fetch_month, months_to_check)
+        with ThreadPoolExecutor(max_workers=min(len(months_to_check), 12)) as executor:
+            results = executor.map(fetch_month_search, months_to_check)
             for r in results:
                 found_festivals.extend(r)
         
-        if found_festivals:
-            trimmed_list = []
-            for item in found_festivals[:40]:
-                if isinstance(item, dict):
-                    trimmed_item = {k: item[k] for k in ['name', 'title', 'date', 'day', 'festivals', 'description'] if k in item}
-                    trimmed_list.append(trimmed_item)
-                else:
-                    trimmed_list.append(item)
-            return json.dumps(trimmed_list)
+        trimmed_list = []
+        for item in found_festivals[:20]:
+            if isinstance(item, dict):
+                trimmed_item = {k: item[k] for k in ['name', 'title', 'date', 'day', 'festivals', 'description'] if k in item}
+                trimmed_list.append(trimmed_item)
+            else:
+                trimmed_list.append(item)
+        return json.dumps(trimmed_list)
 
-    # Standard single month fetch
-    m_name = month.lower() if month else datetime.datetime.now().strftime("%B").lower()
+    # 2. Explicit request for all months (handled separately and intentionally)
+    is_explicit_all_months = bool(month and month.lower().strip() in ["all", "all months", "entire year", "year", "all_months", "every month", "full year"])
+    if is_explicit_all_months:
+        all_months = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]
+        found_festivals = []
+
+        def fetch_month_all(m):
+            try:
+                params = {"year": year, "month": m, "data_language": data_language, "app_language": "EN"}
+                res = requests.get(api_url, params=params, headers=headers, timeout=5)
+                if res.status_code == 200:
+                    data = res.json()
+                    if isinstance(data, list):
+                        return [item for item in data if has_actual_festivals(item)]
+            except Exception:
+                pass
+            return []
+
+        with ThreadPoolExecutor(max_workers=12) as executor:
+            results = executor.map(fetch_month_all, all_months)
+            for r in results:
+                found_festivals.extend(r)
+
+        trimmed_list = []
+        for item in found_festivals[:30]:
+            if isinstance(item, dict):
+                trimmed_item = {k: item[k] for k in ['name', 'title', 'date', 'day', 'festivals', 'description'] if k in item}
+                trimmed_list.append(trimmed_item)
+            else:
+                trimmed_list.append(item)
+        return json.dumps(trimmed_list)
+
+    # 3. Standard single month fetch: use provided month or default to CURRENT month (never fetch 12 months by default)
+    m_name = month.lower().strip() if month else datetime.datetime.now().strftime("%B").lower()
     params = {"year": year, "month": m_name, "data_language": data_language, "app_language": "EN"}
     
     try:
@@ -223,8 +265,10 @@ def get_monthly_festivals(year: Optional[int] = None, month: Optional[str] = Non
         
         if isinstance(data, list):
             trimmed_list = []
-            for item in data[:30]:
+            for item in data:
                 if isinstance(item, dict):
+                    if not has_actual_festivals(item):
+                        continue
                     trimmed_item = {
                         k: item[k] for k in ['name', 'title', 'date', 'day', 'festivals', 'description']
                         if k in item
@@ -232,7 +276,7 @@ def get_monthly_festivals(year: Optional[int] = None, month: Optional[str] = Non
                     trimmed_list.append(trimmed_item)
                 else:
                     trimmed_list.append(item)
-            return json.dumps(trimmed_list)
+            return json.dumps(trimmed_list[:25])
             
         return json.dumps(data)
     
