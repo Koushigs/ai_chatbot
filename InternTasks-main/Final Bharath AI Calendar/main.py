@@ -473,9 +473,9 @@ def detect_tool_type_multilingual(user_query: str, ai_response: str, messages: O
     # Only evaluated when user_query has NO keywords for any tool!
     # ==========================================
     if messages:
-        # 1. PRIORITY CHECK: If current query contains birth details (date, time, place),
+        # 1. PRIORITY CHECK: If current query or multi-turn history contains birth details (date, time, place),
         # inspect conversation history (user queries and assistant responses) to see if Janmarashi or Kundali was requested!
-        current_birth_details = extract_birth_details(user_query)
+        current_birth_details = extract_birth_details(user_query) or extract_birth_details_from_history(messages)
         if current_birth_details:
             safe_print(f"🔍 Checking history for birth details context: {current_birth_details}")
             for m in reversed(messages):
@@ -491,22 +491,22 @@ def detect_tool_type_multilingual(user_query: str, ai_response: str, messages: O
                         or "janma rashi" in clean_content
                         or "moon sign" in clean_content
                     ):
-                        safe_print("✅ JANMARASHI CONFIRMED via history context + current birth details")
+                        safe_print("✅ JANMARASHI CONFIRMED via history context + birth details")
                         return "janmarashi"
 
                     # Kundali check
                     if any(kw in clean_content for kw in KUNDALI_KEYWORDS) or "kundali" in clean_content or "kundli" in clean_content:
-                        safe_print("✅ KUNDALI CONFIRMED via history context + current birth details")
+                        safe_print("✅ KUNDALI CONFIRMED via history context + birth details")
                         return "kundali"
 
                     # Predictive astrology check -> kundali
                     if any(kw in clean_content for kw in PREDICTIVE_KEYWORDS):
-                        safe_print("✅ KUNDALI CONFIRMED via predictive history context + current birth details")
+                        safe_print("✅ KUNDALI CONFIRMED via predictive history context + birth details")
                         return "kundali"
 
                     # Generic rashi check
                     if "rashi" in clean_content and not any(z in clean_content for z in ["aries", "taurus", "gemini", "cancer", "leo", "virgo", "libra", "scorpio", "sagittarius", "capricorn", "aquarius", "pisces", "mesh", "vrishabh", "mithun", "kark", "singh", "kanya", "tula", "vrishchik", "dhanu", "makar", "kumbh", "meen"]):
-                        safe_print("✅ JANMARASHI CONFIRMED via history rashi context + current birth details")
+                        safe_print("✅ JANMARASHI CONFIRMED via history rashi context + birth details")
                         return "janmarashi"
 
         # 2. Language switch query fallback (ONLY when query is purely a language switch request like "in english", "give me it in english")
@@ -541,16 +541,28 @@ def detect_tool_type_multilingual(user_query: str, ai_response: str, messages: O
     return None
 
 
+BIRTH_FIELD_NOISE_WORDS = {
+    'time', 'date', 'year', 'month', 'day', 'clock', 'hour', 'hours', 'minute', 'minutes',
+    'dob', 'tob', 'pob', 'born', 'birth', 'at', 'on', 'is', 'was', 'my', 'the', 'a', 'an',
+    'it', 'in', 'to', 'for', 'me', 'please', 'pls', 'generate', 'gnenrate', 'genrate',
+    'generat', 'ganerate', 'genetate', 'kundali', 'kundli', 'janma', 'janam', 'janmma',
+    'rashi', 'rashee', 'raasi', 'sign', 'report', 'reports', 'chart', 'charts', 'pdf',
+    'details', 'calculation', 'calculate', 'moon', 'sun', 'create', 'make', 'show', 'tell',
+    'get', 'want', 'need', 'hi', 'hello', 'hey', 'yes', 'no', 'ok', 'okay', 'thanks',
+    'place', 'city', 'location', 'unknown', 'none', 'null'
+}
+
+
 def normalize_city_name(city: str) -> str:
     if not city:
-        return city
+        return ""
     # Strip noise words like report, reports, chart, pdf, details, kundali, kundli, generate, genetate
     clean_city = re.sub(
-        r'(?:report|reports|chart|pdf|details|kundali|kundli|janmarashi|janma|janam|rashi|generate|ganerate|genetate|generat|genrate|create|make|show|get|calculate|મારી|જન્મ|કુંડળી|કુંડલી|બનાવો|મોર|ଜନ୍ମ|କୁଣ୍ଡଲି|ପ୍ରସ୍ତୁତ|କରନ୍ତୁ|मेरी|मेरा|जन्म|राशि|बताओ|बताएं|बताइए|बताइये|कुंडली|हिंदी|हिन्दी|ನನ್ನ|ಜನ್ಮ|ರಾಶಿ|ತಿಳಿಸಿ|ಕುಂಡಲಿ|ಲೆಕ್ಕಾಚಾರ|ಮಾಡಿ|ತೋರಿಸಿ|ಕನ್ನಡ)',
+        r'\b(?:report|reports|chart|pdf|details|kundali|kundli|janmarashi|janma|janam|janmma|rashi|rashee|raasi|generate|gnenrate|ganerate|genetate|generat|genrate|create|make|show|get|calculate|tell|what|is|my|for|in|at|city|place|location|time|date|dob|tob|pob|મારી|જન્મ|કુંડળી|કુંડલી|બનાવો|મોર|ଜନ୍ମ|କୁଣ୍ଡଲି|ପ୍ରସ୍ତୁତ|କରନ୍ତୁ|मेरी|मेरा|जन्म|राशि|बताओ|बताएं|बताइए|बताइये|कुंडली|हिंदी|हिन्दी|ನನ್ನ|ಜನ್ಮ|ರಾಶಿ|ತಿಳಿಸಿ|ಕುಂಡಲಿ|ಲೆಕ್ಕಾಚಾರ|ಮಾಡಿ|ತೋರಿಸಿ|ಕನ್ನಡ)\b',
         '', city, flags=re.IGNORECASE
     ).strip(' :=-,')
-    if not clean_city:
-        clean_city = city.strip()
+    if not clean_city or clean_city.lower() in BIRTH_FIELD_NOISE_WORDS:
+        return ""
     return clean_city.title()
 
 
@@ -637,16 +649,114 @@ def is_no_response(text: str) -> bool:
 # =============================================
 
 def extract_birth_details_from_history(messages: List[Dict[str, Any]]) -> Optional[Dict[str, str]]:
-    """Search current query and past user messages in history for birth details."""
+    """Search current query and past user messages in history for birth details (handles both single-message and multi-turn separated details)."""
     if not messages:
         return None
+
+    # 1. Fast-path: Check if any single user message contains all details
     for msg in reversed(messages):
         if isinstance(msg, dict) and msg.get("role") == "user":
             content = str(msg.get("content", ""))
             clean_content = re.sub(r'\s*\(For context, today\'s date is.*?\)\.?', '', content, flags=re.IGNORECASE).strip()
             details = extract_birth_details(clean_content)
-            if details:
+            if details and details.get("date") and details.get("time") and details.get("place") and details["place"] != "Unknown":
                 return details
+
+    # 2. Multi-turn component-wise extraction across user messages in history
+    user_texts = []
+    for msg in messages:
+        if isinstance(msg, dict) and msg.get("role") == "user":
+            c = str(msg.get("content", ""))
+            c_clean = re.sub(r'\s*\(For context, today\'s date is.*?\)\.?', '', c, flags=re.IGNORECASE).strip()
+            c_lower = c_clean.lower()
+            if c_clean and not is_yes_response(c_lower) and not is_no_response(c_lower):
+                user_texts.append(c_clean)
+
+    if not user_texts:
+        return None
+
+    found_date = None
+    found_time = None
+    found_place = None
+    detected_lang = "en"
+
+    for text in reversed(user_texts):
+        # Extract Date if not yet found
+        if not found_date:
+            m_yyyy = re.search(r"\b(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})\b", text)
+            m_dd = re.search(r"\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})\b", text)
+            if m_yyyy:
+                y, m, d = m_yyyy.group(1), m_yyyy.group(2).zfill(2), m_yyyy.group(3).zfill(2)
+                found_date = f"{y}-{m}-{d}"
+            elif m_dd:
+                d, m, y = m_dd.group(1).zfill(2), m_dd.group(2).zfill(2), m_dd.group(3)
+                found_date = f"{y}-{m}-{d}"
+
+        # Extract Time if not yet found
+        if not found_time:
+            m_time_colon = re.search(r"\b(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM|am|pm)?\b", text)
+            m_time_simple = re.search(r"\b(\d{1,2})\s*(AM|PM|am|pm)\b", text)
+            if m_time_colon:
+                hr = int(m_time_colon.group(1))
+                mn = m_time_colon.group(2)
+                ampm = m_time_colon.group(3)
+                if ampm:
+                    found_time = f"{hr:02d}:{mn} {ampm.upper()}"
+                else:
+                    if hr >= 12:
+                        hr_12 = hr if hr == 12 else hr - 12
+                        found_time = f"{hr_12:02d}:{mn} PM"
+                    else:
+                        hr_12 = 12 if hr == 0 else hr
+                        found_time = f"{hr_12:02d}:{mn} AM"
+            elif m_time_simple:
+                hr = int(m_time_simple.group(1))
+                ampm = m_time_simple.group(2).upper()
+                found_time = f"{hr:02d}:00 {ampm}"
+
+        # Extract Place if not yet found
+        if not found_place:
+            # Skip messages that only contain tool request keywords without explicit place
+            is_pure_command = any(kw in text.lower() for kw in ["kundali", "kundli", "janmarashi", "horoscope", "panchang"]) and not any(p in text.lower() for p in ["place", "city", "location", "in ", "at "])
+            if not is_pure_command:
+                m_exp = re.search(r'\b(?:place|city|location|pob)\s*(?:[:=-]|\bis\b|\bin\b)?\s*([^,\n\r?]+)', text, flags=re.IGNORECASE)
+                if m_exp:
+                    raw_p = m_exp.group(1).strip()
+                    cleaned_p = re.sub(r'^(?:in|at|city|place|location)\s+', '', raw_p, flags=re.IGNORECASE).strip(' :=-')
+                    norm = normalize_city_name(cleaned_p)
+                    if norm and norm.lower() not in BIRTH_FIELD_NOISE_WORDS:
+                        found_place = norm
+                else:
+                    rem = text
+                    rem = re.sub(r"\b\d{4}[-/.]\d{1,2}[-/.]\d{1,2}\b", "", rem)
+                    rem = re.sub(r"\b\d{1,2}[-/.]\d{1,2}[-/.]\d{4}\b", "", rem)
+                    rem = re.sub(r"\b\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM|am|pm)?\b", "", rem)
+                    rem = re.sub(r"\b\d{1,2}\s*(?:AM|PM|am|pm)\b", "", rem)
+                    for chunk in re.split(r'[,;\n]', rem):
+                        chunk_clean = chunk.strip()
+                        if chunk_clean:
+                            norm = normalize_city_name(chunk_clean)
+                            if norm and norm.lower() not in BIRTH_FIELD_NOISE_WORDS:
+                                found_place = norm
+                                break
+
+        msg_lang = extract_language(text)
+        if msg_lang and msg_lang != "en":
+            detected_lang = msg_lang
+
+    if found_date and found_time and found_place:
+        coords = get_coordinates_for_place(found_place)
+        res = {
+            "date": found_date,
+            "time": found_time,
+            "place": found_place,
+            "latitude": coords[0],
+            "longitude": coords[1],
+            "lang": detected_lang
+        }
+        safe_print(f"[EXTRACT] ✅ Multi-turn birth details recovered from history: {res}")
+        return res
+
     return None
 
 
@@ -849,7 +959,7 @@ def extract_birth_details(text: str) -> Optional[Dict[str, str]]:
                 ])
                 if cleaned_part and not re.match(r'^\d+$', cleaned_part) and not is_noise:
                     norm_p = normalize_city_name(cleaned_part)
-                    if norm_p:
+                    if norm_p and norm_p not in valid_parts and norm_p.lower() not in BIRTH_FIELD_NOISE_WORDS:
                         valid_parts.append(norm_p)
 
             place_text = ", ".join(valid_parts) if valid_parts else "Unknown"
@@ -2274,6 +2384,7 @@ def invoke_agent(request: QueryRequest, http_request: Request):
     print(f"{'='*70}")
 
     config = {"recursion_limit": 8}
+    captured_tool_payload = None
 
     try:
         for event in react_agent.stream(inputs, config=config, stream_mode="values"):
@@ -2283,6 +2394,17 @@ def invoke_agent(request: QueryRequest, http_request: Request):
                 if isinstance(m, AIMessage) and m.content and not m.tool_calls:
                     final_ai_response = m.content
                     break
+            # Capture any tool payload from get_kundali or get_janmarashi
+            for m in msgs:
+                if isinstance(m, ToolMessage) and m.content:
+                    try:
+                        t_raw = m.content if isinstance(m.content, str) else json.dumps(m.content)
+                        if "kundali_pdf_payload" in t_raw or "janmarashi_payload" in t_raw:
+                            t_json = json.loads(t_raw) if isinstance(t_raw, str) and t_raw.startswith("{") else None
+                            if isinstance(t_json, dict) and t_json.get("type") in ["kundali_pdf_payload", "janmarashi_payload"]:
+                                captured_tool_payload = t_json
+                    except Exception:
+                        pass
             # 2. Fallback: If AI stopped after a ToolMessage without emitting follow-up text, extract and format ToolMessage
             if not final_ai_response:
                 for m in reversed(msgs):
@@ -2334,6 +2456,13 @@ def invoke_agent(request: QueryRequest, http_request: Request):
 
     # ✅ USE ENHANCED MULTILINGUAL DETECTION WITH HISTORY
     tool_type = detect_tool_type_multilingual(original_user_query, final_ai_response, current_messages)
+    if not tool_type and captured_tool_payload:
+        if captured_tool_payload.get("type") == "kundali_pdf_payload":
+            safe_print("✅ KUNDALI CONFIRMED via captured ToolMessage payload")
+            tool_type = "kundali"
+        elif captured_tool_payload.get("type") == "janmarashi_payload":
+            safe_print("✅ JANMARASHI CONFIRMED via captured ToolMessage payload")
+            tool_type = "janmarashi"
     recommendations: Dict[str, Any] = {}
     parsed_data: Dict[str, Any] = {}
     links: Dict[str, Any] = {}
@@ -2380,6 +2509,17 @@ def invoke_agent(request: QueryRequest, http_request: Request):
         safe_print(f"{'='*70}")
 
         birth_details = extract_birth_details_from_history(raw_messages)
+        if not birth_details and captured_tool_payload:
+            c_p = captured_tool_payload.get("place", "Unknown")
+            coords = get_coordinates_for_place(c_p)
+            birth_details = {
+                "date": captured_tool_payload.get("date"),
+                "time": captured_tool_payload.get("time"),
+                "place": c_p,
+                "latitude": coords[0],
+                "longitude": coords[1],
+                "lang": extract_language(original_user_query)
+            }
         if birth_details:
             save_pending_request(
                 conversation_hash=conversation_hash,
@@ -2487,6 +2627,17 @@ def invoke_agent(request: QueryRequest, http_request: Request):
             complete_chat[-1]["content"] = "\n".join(content_lines)
         else:
             birth_details = extract_birth_details_from_history(raw_messages)
+            if not birth_details and captured_tool_payload:
+                c_p = captured_tool_payload.get("place", "Unknown")
+                coords = get_coordinates_for_place(c_p)
+                birth_details = {
+                    "date": captured_tool_payload.get("date"),
+                    "time": captured_tool_payload.get("time"),
+                    "place": c_p,
+                    "latitude": coords[0],
+                    "longitude": coords[1],
+                    "lang": extract_language(original_user_query)
+                }
             if birth_details:
                 save_pending_request(
                     conversation_hash=conversation_hash,
@@ -3104,13 +3255,21 @@ def verify_or_update_payment(request: PaymentVerifyRequest, http_request: Reques
             safe_print(f"📄 Kundali PDF API Payload: {pdf_payload}")
             
             try:
-                verify_param = BHARAT_CA_BUNDLE if BHARAT_CA_BUNDLE else False
-                pdf_response = requests.post(
-                    KUNDALI_PDF_API,
-                    json=pdf_payload,
-                    timeout=30,
-                    verify=verify_param
-                )
+                verify_param = BHARAT_CA_BUNDLE if BHARAT_CA_BUNDLE else True
+                try:
+                    pdf_response = requests.post(
+                        KUNDALI_PDF_API,
+                        json=pdf_payload,
+                        timeout=30,
+                        verify=verify_param
+                    )
+                except requests.exceptions.SSLError:
+                    pdf_response = requests.post(
+                        KUNDALI_PDF_API,
+                        json=pdf_payload,
+                        timeout=30,
+                        verify=False
+                    )
                 
                 safe_print(f"PDF API Response Status: {pdf_response.status_code}")
                 
@@ -3292,13 +3451,21 @@ def download_kundali(
         safe_print(f"📄 Kundali Download PDF API Payload: {pdf_payload}")
         
         try:
-            verify_param = BHARAT_CA_BUNDLE if BHARAT_CA_BUNDLE else False
-            pdf_response = requests.post(
-                KUNDALI_PDF_API,
-                json=pdf_payload,
-                timeout=30,
-                verify=verify_param
-            )
+            verify_param = BHARAT_CA_BUNDLE if BHARAT_CA_BUNDLE else True
+            try:
+                pdf_response = requests.post(
+                    KUNDALI_PDF_API,
+                    json=pdf_payload,
+                    timeout=30,
+                    verify=verify_param
+                )
+            except requests.exceptions.SSLError:
+                pdf_response = requests.post(
+                    KUNDALI_PDF_API,
+                    json=pdf_payload,
+                    timeout=30,
+                    verify=False
+                )
             
             safe_print(f"PDF API Response Status: {pdf_response.status_code}")
             
